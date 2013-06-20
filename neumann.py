@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 class NeumannTracer(object):
     def __init__(self,xnum,ynum,dx,dy,func,start_point=(0.0,0.0),to_edges=False):
         self.arr = n.zeros((xnum,ynum),dtype=n.float64)
+        self.hessian_arr = n.zeros((xnum,ynum),dtype=n.float64)
         self.xnum = xnum
         self.ynum = ynum
         self.shape = (xnum,ynum)
@@ -22,6 +23,7 @@ class NeumannTracer(object):
         self.arr_filled = False
         self.found_crits = False
         self.traced_lines = False
+        self.hessian_filled = False
 
         self.lines = []
 
@@ -131,12 +133,84 @@ class NeumannTracer(object):
             adjs = adjs - val
 
             tracing_start_points = []
-            for i in range(6):
-                cur_adj = adjs[i]
-                next_adj = adjs[(i+1) % 6]
-                if n.sign(next_adj) != n.sign(cur_adj):
-                    sign = n.sign(cur_adj)
-                    tracing_start_points.append((sign,ais[i]))
+            sx,sy = self.start_point
+            dx,dy = self.dr
+            nearby_angles = n.linspace(0,2*n.pi,50)
+            nearby_xs = 0.75*n.cos(nearby_angles) + saddlex
+            nearby_ys = 0.75*n.sin(nearby_angles) + saddley
+            nearby_vals = n.zeros(len(nearby_angles),dtype=n.float64)
+            for i in range(len(nearby_angles)):
+                nearby_vals[i] = self.func(sx + nearby_xs[i]*dx, sy + nearby_ys[i]*dy)
+            sorted_vals = n.argsort(nearby_vals)
+            # tracing_start_points.append((-1.0,[nearby_xs[sorted_vals[0]],nearby_ys[sorted_vals[0]]]))
+            # tracing_start_points.append((1.0,[nearby_xs[sorted_vals[-1]],nearby_ys[sorted_vals[-1]]]))
+
+            angle_1 = nearby_angles[sorted_vals[0]]
+            angle_2 = nearby_angles[sorted_vals[-1]]
+
+            angle_between = n.abs(angle_1 - angle_2)
+            diff_from_rightangle = n.pi/2 - angle_between
+            if angle_2 > angle_1:
+                angle_2 += diff_from_rightangle/2.
+                angle_1 -= diff_from_rightangle/2.
+            else:
+                angle_1 += diff_from_rightangle/2.
+                angle_2 -= diff_from_rightangle/2.
+
+            p1 = [0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]
+            p2 = [0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]
+            angle_1 += n.pi
+            angle_2 += n.pi
+            p3 = [0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]
+            p4 = [0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]
+            ps = [p1,p2,p3,p4]
+
+            v1 = self.func(sx + p1[0]*dx, sy + p1[1]*dy)
+            v2 = self.func(sx + p2[0]*dx, sy + p2[1]*dy)
+            v3 = self.func(sx + p3[0]*dx, sy + p3[1]*dy)
+            v4 = self.func(sx + p4[0]*dx, sy + p4[1]*dy)
+            vals = [v1,v2,v3,v4]
+
+            for i in range(4):
+                p = ps[i]
+                v = vals[i]
+                if v < val:
+                    tracing_start_points.append([-1.0,p])
+                else:
+                    tracing_start_points.append([1.0,p])
+
+            if n.round(n.sum(map(lambda j: j[0],tracing_start_points))) != 0.0:
+                totdir = n.sum(map(lambda j: j[0],tracing_start_points))
+                if tracing_start_points[0][0] != tracing_start_points[2][0]:
+                    if totdir > 0:
+                        tracing_start_points[0][0] = -1.0
+                        tracing_start_points[2][0] = -1.0
+                    else:
+                        tracing_start_points[0][0] = 1.0
+                        tracing_start_points[2][0] = 1.0
+                elif tracing_start_points[1][0] != tracing_start_points[3][0]:
+                    if totdir > 0:
+                        tracing_start_points[1][0] = -1.0
+                        tracing_start_points[3][0] = -1.0
+                    else:
+                        tracing_start_points[1][0] = 1.0
+                        tracing_start_points[3][0] = 1.0
+
+            #print tracing_start_points
+
+            # tracing_start_points.append((-1.0,[0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]))
+            # tracing_start_points.append((1.0,[0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]))
+            # angle_1 += n.pi
+            # angle_2 += n.pi
+            # tracing_start_points.append((-1.0,[0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]))
+            # tracing_start_points.append((1.0,[0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]))
+
+            # for i in range(6):
+            #     cur_adj = adjs[i]
+            #     next_adj = adjs[(i+1) % 6]
+            #     if n.sign(next_adj) != n.sign(cur_adj):
+            #         sign = n.sign(cur_adj)
+            #         tracing_start_points.append((sign,ais[i]))
 
             for coords in tracing_start_points:
                 sign,coords = coords
@@ -170,27 +244,64 @@ class NeumannTracer(object):
         for entry in self.degenerate:
             print entry,self.func(self.sx+entry[0]*self.dx,self.sy+entry[1]*self.dy),self.arr[entry[0],entry[1]]
 
-    def plot(self,trace_lines=True):
+    def make_hessian_array(self):
+        lineprint('Filling Hessian domain array...')
+        arr = self.hessian_arr
+        sx,sy = self.start_point
+        dx,dy = self.dr
+        xnum,ynum = self.shape
+        for x in range(xnum):
+            lineprint('\r\tx = {0} / {1}'.format(x,xnum),False)
+            for y in range(ynum):
+                arr[x,y] = hessian_det(self.func, sx + x*dx, sy + y*dy, dx, dy)
+        
+        self.hessian_filled = True
+
+    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False):
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
             self.find_critical_points()
         if not self.traced_lines and trace_lines:
             self.trace_neumann_lines()
+        if not self.hessian_filled and plot_hessian:
+            self.make_hessian_array()
 
         plotarr = n.rot90(self.arr[::-1],3)
         
         fig,ax = plot_arr_with_crits(plotarr,self.crits)
-
-        for line in self.lines:
-            segs = sanitise_line(line)
-            for seg in segs:
-                ax.plot(seg[:,0],seg[:,1],'-',color='purple')
-            ax.plot(line[:,0],line[:,1],'-',color='purple')
-
         ax.contour(plotarr,levels=[0],alpha=0.2)
+
+        if trace_lines:
+            for line in self.lines:
+                segs = sanitise_line(line)
+                for seg in segs:
+                    ax.plot(seg[:,0],seg[:,1],'-',color='purple')
+                ax.plot(line[:,0],line[:,1],'-',color='purple')
+
+        if plot_hessian:
+            ax.imshow(n.sign(self.hessian_arr),cmap='binary',alpha=0.5)
+            ax.contour(self.hessian_arr,levels=[0],linewidths=2,alpha=0.6,color='cyan')
         
         self.figax = (fig,ax)
+
+        if show_saddle_directions:
+            saddles = self.saddles
+            sx,sy = self.start_point
+            dx,dy = self.dr
+            for saddle in saddles:
+                x,y = saddle
+                hess = hessian(self.func,sx+x*dx,sy+y*dy,dx,dy)
+                eigs,eigvs = n.linalg.eig(hess)
+                dir1 = eigvs[0] / mag(eigvs[0])
+                dir2 = eigvs[1] / mag(eigvs[1])
+                xs1 = [x-3*dir1[0],x,x+3*dir1[0]]
+                ys1 = [y-3*dir1[1],y,y+3*dir1[1]]
+                xs2 = [x-3*dir2[0],x,x+3*dir2[0]]
+                ys2 = [y-3*dir2[1],y,y+3*dir2[1]]
+                ax.plot(xs1,ys1,color='black',linewidth=2)
+                ax.plot(xs2,ys2,color='black',linewidth=2)
+
         return fig,ax
 
 def get_filled_array(xnum,ynum,dx,dy,func,start_point=(0.0,0.0)):
@@ -219,8 +330,8 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
         cx += 0.25*n.cos(angle)
         cy += 0.25*n.sin(angle)
 
-        if len(points)>10:
-            if mag(n.array([cx,cy])-n.array(points[-10])) < 1.0:
+        if len(points)>20:
+            if mag(n.array([cx,cy])-n.array(points[-20])) < 0.75:
                 return (points,None)
         
         points.append([cx,cy])
@@ -244,11 +355,23 @@ def grad(func,x,y,dx,dy):
     dfdy = (func(x,y)-func(x,y+0.05*dy))/(0.05*dy)
     return n.array([dfdx,dfdy])
 
-# def hessian(func,x,y,dx,dy):
-#     dfdx,dfdy = grad(func,x,y,dx,dy)
+def hessian(func,x,y,dx,dy):
+    dfdx,dfdy = grad(func,x,y,dx,dy)
 
-#     dfdxdx = (grad(func,x+0.05*dx,y,dx,dy)[0] - dfdx) / (0.05*dx)
-#     dfdydy = (grad(func,x2
+    dfdxdx = (grad(func,x+0.05*dx,y,dx,dy)[0] - dfdx) / (0.05*dx)
+    dfdydy = (grad(func,x,y+0.05*dy,dx,dy)[1] - dfdy) / (0.05*dy)
+    dfdxdy = (grad(func,x+0.05*dx,y,dx,dy)[1] - dfdy) / (0.05*dx)
+    dfdydx = (grad(func,x,y+0.05*dy,dx,dy)[0] - dfdx) / (0.05*dy)
+
+    return n.array([[dfdxdx,dfdxdy],[dfdydx,dfdydy]])
+
+def hessian_det(func,x,y,dx,dy):
+    hess_mat = hessian(func,x,y,dx,dy)
+    return n.linalg.det(hess_mat)
+
+def hessian_sign(func,x,y,dx,dy):
+    hess_mat = hessian(func,x,y,dx,dy)
+    return n.sign(n.linalg.det(hess_mat))
     
 def critical_points_to_index_dict(crits):
     maxima,minima,saddles,degenerate = crits
@@ -279,7 +402,11 @@ def get_critical_points(arr,to_edges=False):
 
     border_mult = n.ones(6,dtype=n.float64)
 
+    prevx = -1
     for x,y in product(xrange(lx),xrange(ly)):
+        if x != prevx:
+            prevx = x
+            lineprint('\r\tx = {0} / {1}'.format(x,lx),False)
         if to_edges or (x != 0 and y != 0 and x != (lx-1) and y != (ly-1)):
             val = arr[x,y]
             if x % 2 == 0:
@@ -320,6 +447,7 @@ def get_critical_points(arr,to_edges=False):
             elif point_type == 'fail':
                 print 'A failure occurred at',x,y
 
+    lineprint()
 
     return (n.array(maxima),n.array(minima),n.array(saddles),n.array(degenerate))
 
@@ -350,7 +478,7 @@ def plot_arr_with_crits(arr,crits):
 
     fig,ax = plt.subplots()
 
-    ax.imshow(arr,cmap='RdYlBu',interpolation='none',alpha=0.6)
+    ax.imshow(arr,cmap='RdYlBu_r',interpolation='none',alpha=0.6)
 
     legend_entries = []
 
@@ -405,9 +533,13 @@ def random_wave_function(number=50,wvmag=5,seed=0):
 
     def func(x,y):
         res = 0.0
-        for i in range(number):
-            res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
-        return res
+        xyarr = n.array([x,y],dtype=n.float64)
+        interior = wvs.dot(xyarr)*2*n.pi/wvmag + phases
+        exterior = amps*n.sin(interior)
+        return n.sum(exterior)
+        # for i in range(number):
+        #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
+        # return res
 
     return func
 
