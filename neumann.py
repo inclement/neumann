@@ -26,6 +26,8 @@ class NeumannTracer(object):
         self.hessian_filled = False
 
         self.lines = []
+        self.start_points = []
+        self.end_points = []
 
         self.fill_arr()
 
@@ -97,9 +99,12 @@ class NeumannTracer(object):
                 fakemin = n.argmax(heights)
                 realminima[tupminima.index(adjmin[fakemin])] = False
                 realsaddles[i] = False
-        maxima = maxima[realmaxima]
-        minima = minima[realminima]
-        saddles = saddles[realsaddles]
+        maxima = n.array(maxima)[realmaxima]
+        maxima = [tuple(c) for c in maxima]
+        minima = n.array(minima)[realminima]
+        minima = [tuple(c) for c in minima]
+        saddles = n.array(saddles)[realsaddles]
+        saddles = [tuple(c) for c in saddles]
         self.crits = maxima,minima,saddles,degenerate
     def trace_neumann_lines(self):
         if not self.arr_filled:
@@ -133,68 +138,82 @@ class NeumannTracer(object):
             adjs = adjs - val
 
             tracing_start_points = []
-            sx,sy = self.start_point
-            dx,dy = self.dr
-            nearby_angles = n.linspace(0,2*n.pi,50)
-            nearby_xs = 0.75*n.cos(nearby_angles) + saddlex
-            nearby_ys = 0.75*n.sin(nearby_angles) + saddley
-            nearby_vals = n.zeros(len(nearby_angles),dtype=n.float64)
-            for i in range(len(nearby_angles)):
-                nearby_vals[i] = self.func(sx + nearby_xs[i]*dx, sy + nearby_ys[i]*dy)
-            sorted_vals = n.argsort(nearby_vals)
+            for i in range(6):
+                cur_adj = adjs[i]
+                next_adj = adjs[(i+1) % 6]
+                if n.sign(next_adj) != n.sign(cur_adj):
+                    sign = n.sign(cur_adj)
+                    tracing_start_points.append((sign,ais[i]))
+
+            # sx,sy = self.start_point
+            # dx,dy = self.dr
+            # nearby_angles = n.linspace(0,2*n.pi,50)
+            # nearby_xs = 0.75*n.cos(nearby_angles) + saddlex
+            # nearby_ys = 0.75*n.sin(nearby_angles) + saddley
+            # nearby_vals = n.zeros(len(nearby_angles),dtype=n.float64)
+            # for i in range(len(nearby_angles)):
+            #     nearby_vals[i] = self.func(sx + nearby_xs[i]*dx, sy + nearby_ys[i]*dy)
+            # sorted_vals = n.argsort(nearby_vals)
+
+            # direction_indices = get_saddle_directions(nearby_vals-val)
+            # for entry in direction_indices:
+            #     sign = entry[0]
+            #     index = entry[1]
+            #     tracing_start_points.append((sign,[nearby_xs[index],nearby_ys[index]]))
+            
             # tracing_start_points.append((-1.0,[nearby_xs[sorted_vals[0]],nearby_ys[sorted_vals[0]]]))
             # tracing_start_points.append((1.0,[nearby_xs[sorted_vals[-1]],nearby_ys[sorted_vals[-1]]]))
 
-            angle_1 = nearby_angles[sorted_vals[0]]
-            angle_2 = nearby_angles[sorted_vals[-1]]
+            # angle_1 = nearby_angles[sorted_vals[0]]
+            # angle_2 = nearby_angles[sorted_vals[-1]]
 
-            angle_between = n.abs(angle_1 - angle_2)
-            diff_from_rightangle = n.pi/2 - angle_between
-            if angle_2 > angle_1:
-                angle_2 += diff_from_rightangle/2.
-                angle_1 -= diff_from_rightangle/2.
-            else:
-                angle_1 += diff_from_rightangle/2.
-                angle_2 -= diff_from_rightangle/2.
+            # angle_between = n.abs(angle_1 - angle_2)
+            # diff_from_rightangle = n.pi/2 - angle_between
+            # if angle_2 > angle_1:
+            #     angle_2 += diff_from_rightangle/2.
+            #     angle_1 -= diff_from_rightangle/2.
+            # else:
+            #     angle_1 += diff_from_rightangle/2.
+            #     angle_2 -= diff_from_rightangle/2.
 
-            p1 = [0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]
-            p2 = [0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]
-            angle_1 += n.pi
-            angle_2 += n.pi
-            p3 = [0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]
-            p4 = [0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]
-            ps = [p1,p2,p3,p4]
+            # p1 = [1.75*n.cos(angle_1) + saddlex, 1.75*n.sin(angle_1) + saddley]
+            # p2 = [1.75*n.cos(angle_2) + saddlex, 1.75*n.sin(angle_2) + saddley]
+            # angle_1 += n.pi
+            # angle_2 += n.pi
+            # p3 = [1.75*n.cos(angle_1) + saddlex, 1.75*n.sin(angle_1) + saddley]
+            # p4 = [1.75*n.cos(angle_2) + saddlex, 1.75*n.sin(angle_2) + saddley]
+            # ps = [p1,p2,p3,p4]
 
-            v1 = self.func(sx + p1[0]*dx, sy + p1[1]*dy)
-            v2 = self.func(sx + p2[0]*dx, sy + p2[1]*dy)
-            v3 = self.func(sx + p3[0]*dx, sy + p3[1]*dy)
-            v4 = self.func(sx + p4[0]*dx, sy + p4[1]*dy)
-            vals = [v1,v2,v3,v4]
+            # v1 = self.func(sx + p1[0]*dx, sy + p1[1]*dy)
+            # v2 = self.func(sx + p2[0]*dx, sy + p2[1]*dy)
+            # v3 = self.func(sx + p3[0]*dx, sy + p3[1]*dy)
+            # v4 = self.func(sx + p4[0]*dx, sy + p4[1]*dy)
+            # vals = [v1,v2,v3,v4]
 
-            for i in range(4):
-                p = ps[i]
-                v = vals[i]
-                if v < val:
-                    tracing_start_points.append([-1.0,p])
-                else:
-                    tracing_start_points.append([1.0,p])
+            # for i in range(4):
+            #     p = ps[i]
+            #     v = vals[i]
+            #     if v < val:
+            #         tracing_start_points.append([-1.0,p])
+            #     else:
+            #         tracing_start_points.append([1.0,p])
 
-            if n.round(n.sum(map(lambda j: j[0],tracing_start_points))) != 0.0:
-                totdir = n.sum(map(lambda j: j[0],tracing_start_points))
-                if tracing_start_points[0][0] != tracing_start_points[2][0]:
-                    if totdir > 0:
-                        tracing_start_points[0][0] = -1.0
-                        tracing_start_points[2][0] = -1.0
-                    else:
-                        tracing_start_points[0][0] = 1.0
-                        tracing_start_points[2][0] = 1.0
-                elif tracing_start_points[1][0] != tracing_start_points[3][0]:
-                    if totdir > 0:
-                        tracing_start_points[1][0] = -1.0
-                        tracing_start_points[3][0] = -1.0
-                    else:
-                        tracing_start_points[1][0] = 1.0
-                        tracing_start_points[3][0] = 1.0
+            # if n.round(n.sum(map(lambda j: j[0],tracing_start_points))) != 0.0:
+            #     totdir = n.sum(map(lambda j: j[0],tracing_start_points))
+            #     if tracing_start_points[0][0] != tracing_start_points[2][0]:
+            #         if totdir > 0:
+            #             tracing_start_points[0][0] = -1.0
+            #             tracing_start_points[2][0] = -1.0
+            #         else:
+            #             tracing_start_points[0][0] = 1.0
+            #             tracing_start_points[2][0] = 1.0
+            #     elif tracing_start_points[1][0] != tracing_start_points[3][0]:
+            #         if totdir > 0:
+            #             tracing_start_points[1][0] = -1.0
+            #             tracing_start_points[3][0] = -1.0
+            #         else:
+            #             tracing_start_points[1][0] = 1.0
+            #             tracing_start_points[3][0] = 1.0
 
             #print tracing_start_points
 
@@ -220,7 +239,20 @@ class NeumannTracer(object):
                     direction = 'up'
                 points,endcoord = trace_gradient_line(coords[0],coords[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
                 points = [saddle] + points
+
+                self.start_points.append(tuple(saddle))
+                if endcoord is not None:
+                    self.end_points.append(tuple(endcoord))
+                else:
+                    self.end_points.append(None)
                 self.lines.append(n.array(points))
+
+                # if endcoord is not None and tuple(endcoord) not in self.minima and tuple(endcoord) not in self.maxima:
+                #     fval = self.func(self.sx + endcoord[0]*self.dx, self.sy + endcoord[1]*self.dy)
+                #     if fval > 0:
+                #         self.maxima.append(tuple(endcoord))
+                #     else:
+                #         self.minima.append(tuple(endcoord))
 
         lineprint()
         self.traced_lines = True
@@ -332,7 +364,7 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
 
         if len(points)>20:
             if mag(n.array([cx,cy])-n.array(points[-20])) < 0.75:
-                return (points,None)
+                return (points,[int(n.round(cx)),int(n.round(cy))])
         
         points.append([cx,cy])
 
@@ -349,6 +381,14 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
         if (nearx,neary) in critdict:
             points.append((nearx,neary))
             return (points,(nearx,neary))
+        else:
+            for indices in all_adj_indices:
+                if (nearx + indices[0],neary + indices[1]) in critdict:
+                    coords = (nearx + indices[0], neary + indices[1])
+                    crit_type = critdict[coords]
+                    if crit_type in ['maximum','minimum']:
+                        points.append(coords)
+                        return (points,coords)
 
 def grad(func,x,y,dx,dy):
     dfdx = (func(x,y)-func(x+0.05*dx,y))/(0.05*dx)
@@ -449,7 +489,8 @@ def get_critical_points(arr,to_edges=False):
 
     lineprint()
 
-    return (n.array(maxima),n.array(minima),n.array(saddles),n.array(degenerate))
+    return (maxima,minima,saddles,degenerate)
+    #return (n.array(maxima),n.array(minima),n.array(saddles),n.array(degenerate))
 
 def classify_point(ds):
     if n.all(ds > 0):
@@ -475,6 +516,10 @@ def classify_point(ds):
 
 def plot_arr_with_crits(arr,crits):
     maxima,minima,saddles,degenerate = crits
+    maxima = n.array(maxima)
+    minima = n.array(minima)
+    saddles = n.array(saddles)
+    degenerate = n.array(degenerate)
 
     fig,ax = plt.subplots()
 
@@ -554,3 +599,48 @@ def lineprint(s='',newline=True):
     sys.stdout.flush()
 
 
+def get_saddle_directions(vals):
+    changes = []
+    for i in range(len(vals)):
+        cur = vals[i]
+        next = vals[(i+1) % len(vals)]
+        if n.sign(next) != n.sign(cur):
+            changes.append((i+1) % len(vals))
+
+    returns = []
+    if len(changes) == 4:
+        region_1 = vals[changes[0]:changes[1]]
+        region_2 = vals[changes[1]:changes[2]]
+        region_3 = vals[changes[2]:changes[3]]
+        region_4a = vals[changes[3]:]
+        region_4b = vals[:changes[0]]
+        if len(region_4a) > 0 and len(region_4b) > 0:
+            region_4 = n.hstack((region_4a,region_4b))
+        elif len(region_4a) > 0:
+            region_4 = region_4a
+        else:
+            region_4 = region_4b
+
+        if n.sign(region_1[0]) > 0:
+            returns.append((1.0,n.argmax(region_1) + changes[0]))
+        else:
+            returns.append((-1.0,n.argmax(region_1) + changes[0]))
+        if n.sign(region_2[0]) > 0:
+            returns.append((1.0,n.argmax(region_2) + changes[1]))
+        else:
+            returns.append((-1.0,n.argmax(region_2) + changes[1]))
+        if n.sign(region_3[0]) > 0:
+            returns.append((1.0,n.argmax(region_3) + changes[2]))
+        else:
+            returns.append((-1.0,n.argmax(region_3) + changes[2]))
+        if n.sign(region_4[0]) > 0:
+            returns.append((1.0,(n.argmax(region_4) + changes[3]) % len(vals)))
+        else:
+            returns.append((-1.0,(n.argmax(region_4) + changes[3]) % len(vals)))
+    else:
+        print 'Saddle doesn\'t have 4 sign changes?'
+        print vals
+        print changes
+    return returns
+            
+            
