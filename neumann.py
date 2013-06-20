@@ -3,6 +3,32 @@ from itertools import product
 
 import matplotlib.pyplot as plt
 
+class CriticalGraph(dict):
+    def __init__(self,*args):
+        super(CriticalGraph, self).__init__(*args)
+        self.nodes_aligned = False
+    def add_or_edit_node(self, node_coords, node_type, new_line):
+        assert isinstance(new_line,NeumannLine), "Didn't receive NeumannLine!"
+        if not self.nodes_aligned:
+            self.align_nodes()
+        if not self.has_key(node_coords):
+            self[node_coords] = [node_type,[]]
+        self[node_coords][1].append(new_line)
+    def align_nodes(self):
+        self.nodes_aligned = True
+
+class NeumannLine(object):
+    def __init__(self,start,end,start_type,end_type,points):
+        self.start = start
+        self.end = end
+        self.start_type = start_type
+        self.end_type = end_type
+        self.points = points
+    def __str__(self):
+        return 'Neumann line: {0} at {1} -> {2} at {3}'.format(self.start_type, self.start, self.end_type, self.end)
+    def __repr__(self):
+        return self.__str__()
+
 class NeumannTracer(object):
     def __init__(self,xnum,ynum,dx,dy,func,start_point=(0.0,0.0),to_edges=False):
         self.arr = n.zeros((xnum,ynum),dtype=n.float64)
@@ -24,6 +50,9 @@ class NeumannTracer(object):
         self.found_crits = False
         self.traced_lines = False
         self.hessian_filled = False
+        self.graph_built = False
+
+        self.graph = CriticalGraph()
 
         self.lines = []
         self.start_points = []
@@ -237,7 +266,8 @@ class NeumannTracer(object):
                     direction = 'down'
                 else:
                     direction = 'up'
-                points,endcoord = trace_gradient_line(coords[0],coords[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
+                diff = [coords[0]-saddlex,coords[1]-saddley]
+                points,endcoord = trace_gradient_line(coords[0] + 0.5*diff[0],coords[1] + 0.5*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
                 points = [saddle] + points
 
                 self.start_points.append(tuple(saddle))
@@ -288,6 +318,28 @@ class NeumannTracer(object):
                 arr[x,y] = hessian_det(self.func, sx + x*dx, sy + y*dy, dx, dy)
         
         self.hessian_filled = True
+
+    def build_graph(self):
+        if not self.arr_filled:
+            self.fill_arr()
+        if not self.found_crits:
+            self.find_critical_points()
+        if not self.traced_lines:
+            self.trace_neumann_lines()
+
+        for i in range(len(self.lines)):
+            start = self.start_points[i]
+            end  = self.end_points[i]
+            line = self.lines[i]
+            start_crit_type = self.crits_dict[start]
+            if end is not None:
+                end_crit_type = self.crits_dict[end]
+            else:
+                end_crit_type = None
+            neuline = NeumannLine(start,end,start_crit_type,end_crit_type,line)
+            self.graph.add_or_edit_node(start, start_crit_type, neuline)
+
+        self.graph_built = True
 
     def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False):
         if not self.arr_filled:
