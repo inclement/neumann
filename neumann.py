@@ -16,6 +16,52 @@ class CriticalGraph(dict):
         self[node_coords][1].append(new_line)
     def align_nodes(self):
         self.nodes_aligned = True
+        for key in self:
+            lines = self[key][1]
+            angles = n.zeros(len(lines),dtype=n.float64)
+            for i in range(len(lines)):
+                line = lines[i]
+                first = line[0]
+                second = line[1]
+                angle = n.arctan2(second[1]-first[1],second[0]-first[0])
+                angles[i] = angle
+            order = n.argsort(angles)
+            newlines = []
+            for i in range(len(order)):
+                newlines.append(lines[i])
+            self[key][1] = newlines
+    def get_closed_domains(self):
+        blighted_starts = []
+        domains = []
+        for start in self:
+            crit_type,lines = self[start]
+            if crit_type == 'saddle' and start not in blighted_starts:
+                blighted_starts.append(start)
+                
+
+
+class NeumannDomain(object):
+    def __init__(self,lines):
+        self.lines = lines
+        maxima,minima,saddles = 0,0,0
+        for line in lines:
+            start = linte.start_type
+            if start == 'maximum':
+                maxima += 1
+            elif start == 'minimum':
+                minima += 1
+            elif start == 'saddle':
+                saddles += 1
+        self.maxnum = maxima
+        self.minnum = minima
+        self.sadnum = saddles
+    def closed_curve(self):
+        points = []
+        for line in self.lines:
+            points.append(line.points)
+        return n.vstack(points)
+    def __str__(self):
+        return 'Neumann domain with {0} saddles, {1} maxima, {2} minima'.format(self.sadnum,self.maxnum,self.minnum)
 
 class NeumannLine(object):
     def __init__(self,start,end,start_type,end_type,points):
@@ -24,10 +70,19 @@ class NeumannLine(object):
         self.start_type = start_type
         self.end_type = end_type
         self.points = points
+    def inverse(self):
+        inv = NeumannLine(self.end,self.start,self.end_type,self.start_type,self.points[::-1])
+        return inv
     def __str__(self):
         return 'Neumann line: {0} at {1} -> {2} at {3}'.format(self.start_type, self.start, self.end_type, self.end)
     def __repr__(self):
         return self.__str__()
+    def __getitem__(self,*args):
+        return self.points.__getitem__(*args)
+    def __setitem__(self,*args):
+        return self.points.__setitem__(*args)
+    def __len__(self,*args):
+        return len(self.points)
 
 class NeumannTracer(object):
     def __init__(self,xnum,ynum,dx,dy,func,start_point=(0.0,0.0),to_edges=False):
@@ -61,6 +116,11 @@ class NeumannTracer(object):
         self.fill_arr()
 
         self.figax = (None,None)
+
+    def func_at_coord(self,x,y):
+        sx,sy = self.start_point
+        dx,dy = self.dr
+        return self.func(sx + x*dx, sy + y*dy)
 
     def fill_arr(self):
         print 'Populating function sample array...'
@@ -277,14 +337,15 @@ class NeumannTracer(object):
                     self.end_points.append(None)
                 self.lines.append(n.array(points))
 
-                # if endcoord is not None and tuple(endcoord) not in self.minima and tuple(endcoord) not in self.maxima:
-                #     fval = self.func(self.sx + endcoord[0]*self.dx, self.sy + endcoord[1]*self.dy)
-                #     if fval > 0:
-                #         self.maxima.append(tuple(endcoord))
-                #     else:
-                #         self.minima.append(tuple(endcoord))
+                if endcoord is not None and tuple(endcoord) not in self.minima and tuple(endcoord) not in self.maxima:
+                    fval = self.func(self.sx + endcoord[0]*self.dx, self.sy + endcoord[1]*self.dy)
+                    if fval > 0:
+                        self.maxima.append(tuple(endcoord))
+                    else:
+                        self.minima.append(tuple(endcoord))
 
         lineprint()
+        self.crits_dict = critical_points_to_index_dict(self.crits)
         self.traced_lines = True
 
     def print_critical_heights(self):
@@ -333,11 +394,22 @@ class NeumannTracer(object):
             line = self.lines[i]
             start_crit_type = self.crits_dict[start]
             if end is not None:
+                print end
+                if end in self.maxima:
+                    print 'maximum'
+                elif end in self.minima:
+                    print 'minimum'
+                elif end in self.saddles:
+                    print 'saddle'
+                else:
+                    print 'none'
+                #print self.crits_dict
                 end_crit_type = self.crits_dict[end]
             else:
                 end_crit_type = None
             neuline = NeumannLine(start,end,start_crit_type,end_crit_type,line)
             self.graph.add_or_edit_node(start, start_crit_type, neuline)
+            self.graph.add_or_edit_node(end, end_crit_type, neuline.inverse())
 
         self.graph_built = True
 
@@ -416,6 +488,7 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
 
         if len(points)>20:
             if mag(n.array([cx,cy])-n.array(points[-20])) < 0.75:
+                print 'new points',[int(n.round(cx)),int(n.round(cy))]
                 return (points,[int(n.round(cx)),int(n.round(cy))])
         
         points.append([cx,cy])
