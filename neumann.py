@@ -1,7 +1,12 @@
 import numpy as n
 from itertools import product
+from colorsys import hsv_to_rgb
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+
+mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
+patch_linestyles = ['solid','dashed','dashdot','dotted']
 
 class CriticalGraph(dict):
     def __init__(self,*args):
@@ -9,13 +14,12 @@ class CriticalGraph(dict):
         self.nodes_aligned = False
     def add_or_edit_node(self, node_coords, node_type, new_line):
         assert isinstance(new_line,NeumannLine), "Didn't receive NeumannLine!"
-        if not self.nodes_aligned:
-            self.align_nodes()
+        # if not self.nodes_aligned:
+        #     self.align_nodes()
         if not self.has_key(node_coords):
             self[node_coords] = [node_type,[]]
         self[node_coords][1].append(new_line)
     def align_nodes(self):
-        self.nodes_aligned = True
         for key in self:
             lines = self[key][1]
             angles = n.zeros(len(lines),dtype=n.float64)
@@ -28,31 +32,75 @@ class CriticalGraph(dict):
             order = n.argsort(angles)
             newlines = []
             for i in range(len(order)):
-                newlines.append(lines[i])
+                newlines.append(lines[order[i]])
             self[key][1] = newlines
+        self.nodes_aligned = True
     def get_closed_domains(self):
+        if not self.nodes_aligned:
+            self.align_nodes()
         blighted_starts = []
         domains = []
         for start in self:
             crit_type,lines = self[start]
             if crit_type == 'saddle' and start not in blighted_starts:
                 blighted_starts.append(start)
+                for line in self[start][1]:
+                    dom = self.get_domain_from(line)
+                    if dom is not None:
+                        domains.append(self.get_domain_from(line))
+        return domains
     def get_domain_from(self,line,dir='clockwise'):
+        if not self.nodes_aligned:
+            self.align_nodes()
         lines = []
         lines.append(line)
+        closing_node = line.start
         start = line.start
         end = line.end
         curline = line
-        while end != start:
+        if end == start:
+            return None
+        while end != closing_node:
+            if len(lines) > 10 or end is None or end == start:
+                return None
             node = curline.end
             crit_type, node_lines = self[node]
+            lines_come_from = map(lambda j: j.end,node_lines)
+            if start in lines_come_from:
+                in_line_index = lines_come_from.index(start)
+            else:
+                print 'Start not found'
+                return None
+            if dir == 'clockwise':
+                out_line_index = (in_line_index + 1) % len(node_lines)
+            else:
+                out_line_index = (in_line_index - 1) % len(node_lines)
+            curline = node_lines[out_line_index]
+            lines.append(curline)
+            start = curline.start
+            end = curline.end
+        return NeumannDomain(lines)
+    def get_crit_dimension_dists(self):
+        sadnums = []
+        maxnums = []
+        minnums = []
+        for node in self:
+            print self[node]
+            crit_type,lines = self[node]
+            if crit_type == 'saddle':
+                sadnums.append(len(lines))
+            elif crit_type == 'maximum':
+                maxnums.append(len(lines))
+            elif crit_type == 'minimum':
+                minnums.append(len(lines))
+        return maxnums,minnums,sadnums
 
 class NeumannDomain(object):
     def __init__(self,lines):
         self.lines = lines
         maxima,minima,saddles = 0,0,0
         for line in lines:
-            start = linte.start_type
+            start = line.start_type
             if start == 'maximum':
                 maxima += 1
             elif start == 'minimum':
@@ -62,13 +110,17 @@ class NeumannDomain(object):
         self.maxnum = maxima
         self.minnum = minima
         self.sadnum = saddles
-    def closed_curve(self):
+    def as_closed_curve(self):
         points = []
         for line in self.lines:
             points.append(line.points)
         return n.vstack(points)
+    def number_of_sides(self):
+        return len(self.lines)
     def __str__(self):
-        return 'Neumann domain with {0} saddles, {1} maxima, {2} minima'.format(self.sadnum,self.maxnum,self.minnum)
+        return '<Neumann domain with {0} saddles, {1} maxima, {2} minima>'.format(self.sadnum,self.maxnum,self.minnum)
+    def __repr__(self):
+        return self.__str__()
 
 class NeumannLine(object):
     def __init__(self,start,end,start_type,end_type,points):
@@ -81,7 +133,7 @@ class NeumannLine(object):
         inv = NeumannLine(self.end,self.start,self.end_type,self.start_type,self.points[::-1])
         return inv
     def __str__(self):
-        return 'Neumann line: {0} at {1} -> {2} at {3}'.format(self.start_type, self.start, self.end_type, self.end)
+        return '<Neumann line: {0} at {1} -> {2} at {3}>'.format(self.start_type, self.start, self.end_type, self.end)
     def __repr__(self):
         return self.__str__()
     def __getitem__(self,*args):
@@ -113,8 +165,10 @@ class NeumannTracer(object):
         self.traced_lines = False
         self.hessian_filled = False
         self.graph_built = False
+        self.found_domains = False
 
         self.graph = CriticalGraph()
+        self.domains = []
 
         self.lines = []
         self.start_points = []
@@ -234,12 +288,22 @@ class NeumannTracer(object):
             adjs = adjs - val
 
             tracing_start_points = []
+            current_region_angles = []
             for i in range(6):
                 cur_adj = adjs[i]
                 next_adj = adjs[(i+1) % 6]
+                current_region_angles.append(n.arctan2(ais[i][1]-saddley,ais[i][0]-saddlex))
                 if n.sign(next_adj) != n.sign(cur_adj):
                     sign = n.sign(cur_adj)
-                    tracing_start_points.append((sign,ais[i]))
+                    tracing_start_points.append([sign,ais[i]])
+                    # angle = n.average(current_region_angles)
+                    # aix = n.cos(angle) + saddlex
+                    # aiy = n.sin(angle) + saddley
+                    # tracing_start_points.append([sign,[aix,aiy]])
+                    # # print current_region_angles, n.average(current_region_angles)
+                    # # print 'ais',aix,aiy,ais[i]
+                    # current_region_angles = []
+                    
 
             # sx,sy = self.start_point
             # dx,dy = self.dr
@@ -335,6 +399,8 @@ class NeumannTracer(object):
                     direction = 'up'
                 diff = [coords[0]-saddlex,coords[1]-saddley]
                 points,endcoord = trace_gradient_line(coords[0] + 0.5*diff[0],coords[1] + 0.5*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
+                if len(points) > 5:
+                    points = points[5:]
                 points = [saddle] + points
 
                 self.start_points.append(tuple(saddle))
@@ -420,7 +486,33 @@ class NeumannTracer(object):
 
         self.graph_built = True
 
-    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False):
+    def get_recognised_domains(self):
+        if not self.arr_filled:
+            self.fill_arr()
+        if not self.found_crits:
+            self.find_critical_points()
+        if not self.traced_lines:
+            self.trace_neumann_lines()
+        if not self.graph_built:
+            self.build_graph()
+        self.found_domains = True
+        domains = self.graph.get_closed_domains()
+        self.domains = domains
+
+    def build_everything(self,including_hessian=False):
+        if not self.arr_filled:
+            self.fill_arr()
+        if not self.found_crits:
+            self.find_critical_points()
+        if not self.traced_lines:
+            self.trace_neumann_lines()
+        if not self.graph_built:
+            self.build_graph()
+        if not self.found_domains:
+            self.get_recognised_domains()
+        if not self.hessian_filled and including_hessian:
+            self.make_hessian_array()
+    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_recognised_domains=False,show_domain_patches=False):
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -429,11 +521,51 @@ class NeumannTracer(object):
             self.trace_neumann_lines()
         if not self.hessian_filled and plot_hessian:
             self.make_hessian_array()
+        if not self.found_domains and show_domain_patches:
+            self.get_recognised_domains()
 
         plotarr = n.rot90(self.arr[::-1],3)
         
-        fig,ax = plot_arr_with_crits(plotarr,self.crits)
-        ax.contour(plotarr,levels=[0],alpha=0.2)
+        #fig,ax = plot_arr_with_crits(plotarr,self.crits)
+        maxima,minima,saddles,degenerate = self.crits
+        maxima = n.array(maxima)
+        minima = n.array(minima)
+        saddles = n.array(saddles)
+        degenerate = n.array(degenerate)
+
+        fig,ax = plt.subplots()
+
+        if not show_domain_patches:
+            ax.imshow(plotarr,cmap='RdYlBu_r',interpolation='none',alpha=0.6)
+        else:
+            ax.imshow(plotarr,cmap='RdYlBu_r',interpolation='none',alpha=0.4)
+
+        ax.set_xlim(0,plotarr.shape[0])
+        ax.set_ylim(0,plotarr.shape[1])
+
+        if show_domain_patches:
+            for domain in self.domains:
+                colour = hsv_to_rgb(n.random.random(),1.,1.)
+                ps = domain.as_closed_curve()
+                patch = Polygon(ps,alpha=0.7,
+                                color=colour,
+                                linestyle=n.random.choice(patch_linestyles))
+                ax.add_patch(patch)
+
+        legend_entries = []
+        if len(maxima) > 0:
+            ax.scatter(maxima[:,0],maxima[:,1],60,c='r')
+            legend_entries.append('maxima')
+        if len(minima) > 0:
+            ax.scatter(minima[:,0],minima[:,1],60,c='b')
+            legend_entries.append('minima')
+        if len(saddles) > 0:
+            ax.scatter(saddles[:,0],saddles[:,1],60,color='yellow')
+            legend_entries.append('saddles')
+        if len(degenerate) > 0:
+            ax.scatter(degenerate[:,0],degenerate[:,1],c='orange')
+            legend_entries.append('degenerate')
+            ax.contour(plotarr,levels=[0],alpha=0.2)
 
         if trace_lines:
             for line in self.lines:
@@ -447,6 +579,7 @@ class NeumannTracer(object):
             ax.contour(self.hessian_arr,levels=[0],linewidths=2,alpha=0.6,color='cyan')
         
         self.figax = (fig,ax)
+
 
         if show_saddle_directions:
             saddles = self.saddles
