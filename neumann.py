@@ -37,8 +37,15 @@ class CriticalGraph(dict):
             crit_type,lines = self[start]
             if crit_type == 'saddle' and start not in blighted_starts:
                 blighted_starts.append(start)
-                
-
+    def get_domain_from(self,line,dir='clockwise'):
+        lines = []
+        lines.append(line)
+        start = line.start
+        end = line.end
+        curline = line
+        while end != start:
+            node = curline.end
+            crit_type, node_lines = self[node]
 
 class NeumannDomain(object):
     def __init__(self,lines):
@@ -710,7 +717,6 @@ def random_wave_function(number=50,wvmag=5,seed=0):
         # for i in range(number):
         #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
         # return res
-
     return func
 
 def mag(v):
@@ -768,4 +774,16 @@ def get_saddle_directions(vals):
         print changes
     return returns
             
-            
+
+def angle_index(line,lines):
+    endseg = line[-2:][::-1]
+    angle = n.arctan2(endseg[1,1]-endseg[0,1],endseg[1,0]-endseg[0,0])
+    angles = n.zeros(len(lines),dtype=n.float64)
+    for i in range(len(lines)):
+        curline = lines[i]
+        seg = curline[:2]
+        angles[i] = n.arctan2(seg[1,1]-seg[0,1],seg[1,0]-seg[0,0])
+    if n.any(angle > angles):
+        return n.argmax(angle > angles)
+    else:
+        return 0
