@@ -9,10 +9,26 @@ mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
 
 class CriticalGraph(dict):
+    '''A dict subclass representing the graph of Neumann nodes (critical
+    points) and their connections (Neumann gradient lines). Nodes are
+    stored via their coordinates, with node information as [node type,
+    [list of Neumann lines]].
+
+    Nodes should be added with add_or_edit_node rather than by direct
+    dict setting.
+
+    '''
+    
     def __init__(self,*args):
         super(CriticalGraph, self).__init__(*args)
         self.nodes_aligned = False
     def add_or_edit_node(self, node_coords, node_type, new_line):
+        '''
+        Add the line new_line to the node with coords node_coords. If this
+        node does not already exist, create it first.
+
+        node_type is the critical point type, i.e. maximum, minimum or saddle.
+        '''
         assert isinstance(new_line,NeumannLine), "Didn't receive NeumannLine!"
         # if not self.nodes_aligned:
         #     self.align_nodes()
@@ -20,6 +36,13 @@ class CriticalGraph(dict):
             self[node_coords] = [node_type,[]]
         self[node_coords][1].append(new_line)
     def align_nodes(self):
+        '''Goes through every node of the graph and rearranges the lines so
+        that they are listed in increasing order of approach angle about the
+        node.
+
+        This is called automatically (and is essential) before tracing
+        nodal domains.
+        '''
         for key in self:
             lines = self[key][1]
             angles = n.zeros(len(lines),dtype=n.float64)
@@ -36,6 +59,13 @@ class CriticalGraph(dict):
             self[key][1] = newlines
         self.nodes_aligned = True
     def get_closed_domains(self):
+        '''
+        Returns a list of all closed domains, recognised by walking
+        clockwise or anticlockwise from every saddle point.
+
+        Explicitly fails when a node passes through a cell boundary or
+        includes a line that returns to its own node.
+        '''
         if not self.nodes_aligned:
             self.align_nodes()
         blighted_starts = []
@@ -50,6 +80,11 @@ class CriticalGraph(dict):
                         domains.append(self.get_domain_from(line))
         return domains
     def get_domain_from(self,line,dir='clockwise'):
+        '''
+        Returns the closed domain (or None if the algorithm fails)
+        obtained by walking along line until reaching the start point
+        of line again.
+        '''
         if not self.nodes_aligned:
             self.align_nodes()
         lines = []
@@ -81,11 +116,19 @@ class CriticalGraph(dict):
             end = curline.end
         return NeumannDomain(lines)
     def get_crit_dimension_dists(self):
+        '''Returns the dimension (number of lines going in/out) of each
+        critical point in self. Order is maxima, minima, saddles.
+
+        Currently returns dubious (i.e. wrong) statistics due to not
+        taking account of critical points at the boundary having the
+        wrong number of detected lines.
+
+        '''
         sadnums = []
         maxnums = []
         minnums = []
         for node in self:
-            print self[node]
+            #print self[node]
             crit_type,lines = self[node]
             if crit_type == 'saddle':
                 sadnums.append(len(lines))
@@ -96,6 +139,11 @@ class CriticalGraph(dict):
         return maxnums,minnums,sadnums
 
 class NeumannDomain(object):
+    '''Represents a Neumann domain by storing a list of boundary
+    NeumannLines. Also stores the number of saddles, maxima and minima
+    participating in the domain.
+
+    '''
     def __init__(self,lines):
         self.lines = lines
         maxima,minima,saddles = 0,0,0
@@ -111,11 +159,15 @@ class NeumannDomain(object):
         self.minnum = minima
         self.sadnum = saddles
     def as_closed_curve(self):
+        '''
+        Joins the component lines and returns a single 2d array of points making up the domain boundary.
+        '''
         points = []
         for line in self.lines:
             points.append(line.points)
         return n.vstack(points)
     def number_of_sides(self):
+        '''Returns the number of domain walls.'''
         return len(self.lines)
     def __str__(self):
         return '<Neumann domain with {0} saddles, {1} maxima, {2} minima>'.format(self.sadnum,self.maxnum,self.minnum)
@@ -123,6 +175,16 @@ class NeumannDomain(object):
         return self.__str__()
 
 class NeumannLine(object):
+    '''
+    Represents a Neumann line. Points may be indexed using array notation.
+
+    Args:
+    - start: Coordinates of start node.
+    - end: Coordinates of end node.
+    - start_type: Start critical point type (maximum, minimum, saddle).
+    - end_type: End critical point type.
+    - points: 2d array of points making up the line.
+    '''
     def __init__(self,start,end,start_type,end_type,points):
         self.start = start
         self.end = end
@@ -130,6 +192,9 @@ class NeumannLine(object):
         self.end_type = end_type
         self.points = points
     def inverse(self):
+        '''
+        Returns the equivalent line going in the opposite direction and with start/end reversed.
+        '''
         inv = NeumannLine(self.end,self.start,self.end_type,self.start_type,self.points[::-1])
         return inv
     def __str__(self):
@@ -144,6 +209,20 @@ class NeumannLine(object):
         return len(self.points)
 
 class NeumannTracer(object):
+    '''
+    Stores information about a function and appropriate x/y information to store information about it in an array.
+
+    Args:
+    - xnum: Number of x pixels to sample
+    - ynum: Number of y pixels to sample
+    - dx: Step length dx for each pixel
+    - dy: Step length dy for each pixel
+    - func: A function to look for critical points in
+    - start_point: The (x,y) tuple to take as (0,0) in the function.
+    - to_edges: May be False (ignore edges),
+                'periodic' (use periodic boundary conditions) or
+                'fourier' (periodic with a -1 factor if passing through the boundary).
+    '''
     def __init__(self,xnum,ynum,dx,dy,func,start_point=(0.0,0.0),to_edges=False):
         self.arr = n.zeros((xnum,ynum),dtype=n.float64)
         self.hessian_arr = n.zeros((xnum,ynum),dtype=n.float64)
@@ -179,11 +258,19 @@ class NeumannTracer(object):
         self.figax = (None,None)
 
     def func_at_coord(self,x,y):
+        '''
+        Return the value of self.func at abstract coordinates x,y translated via dx and the correct start point.
+        '''
         sx,sy = self.start_point
         dx,dy = self.dr
         return self.func(sx + x*dx, sy + y*dy)
 
     def fill_arr(self):
+        '''
+        Sample the function on a (self.xnum,self.ynum) array.
+
+        Result stored in self.arr.
+        '''
         print 'Populating function sample array...'
         arr = self.arr
         sx,sy = self.start_point
@@ -196,6 +283,12 @@ class NeumannTracer(object):
         self.arr_filled = True
 
     def find_critical_points(self):
+        '''
+        Iterate over self.arr walking about each pixel and checking the
+        number of sign changes. Bin the result appropriately as a
+        maximum, minimum, saddle or regular point, and store in
+        self.crits.
+        '''
         if not self.arr_filled:
             self.fill_arr()
         print 'Finding critical points...'
@@ -212,6 +305,13 @@ class NeumannTracer(object):
         self.found_crits = True
 
     def prune_critical_points(self):
+        '''Detects and removes points where two extrema border a single
+        saddle - it seems that these are (almost?) always numerical
+        mistakes.
+
+        This approach is a little crude, a later replacement might involve resampling.
+
+        '''
         print 'Pruning critical points'
         maxima,minima,saddles,degenerate = self.crits
 
@@ -223,6 +323,7 @@ class NeumannTracer(object):
         realsaddles = n.ones(len(saddles),dtype=bool)
 
         for i in range(len(saddles)):
+            lineprint('\r\tChecking saddle {0} / {1}'.format(i,len(saddles)),False)
             saddle = saddles[i]
             adj = all_adj_indices.copy()
             adj[:,0] += saddle[0]
@@ -249,6 +350,7 @@ class NeumannTracer(object):
                 fakemin = n.argmax(heights)
                 realminima[tupminima.index(adjmin[fakemin])] = False
                 realsaddles[i] = False
+        lineprint()
         maxima = n.array(maxima)[realmaxima]
         maxima = [tuple(c) for c in maxima]
         minima = n.array(minima)[realminima]
@@ -257,6 +359,12 @@ class NeumannTracer(object):
         saddles = [tuple(c) for c in saddles]
         self.crits = maxima,minima,saddles,degenerate
     def trace_neumann_lines(self):
+        '''For every saddle in self.crits, drop 4 Neumann lines at the points
+        of adjacent sign change, each gradient ascending/descending
+        appropriately until they hit another critical point or appear
+        to have stopped. The resulting lines are stored in self.lines.
+
+        '''
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -422,6 +530,9 @@ class NeumannTracer(object):
         self.traced_lines = True
 
     def print_critical_heights(self):
+        '''
+        Print the height of every critical point in self.crits.
+        '''
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -441,6 +552,9 @@ class NeumannTracer(object):
             print entry,self.func(self.sx+entry[0]*self.dx,self.sy+entry[1]*self.dy),self.arr[entry[0],entry[1]]
 
     def make_hessian_array(self):
+        '''
+        Calculate the hessian at every point of self.arr.
+        '''
         lineprint('Filling Hessian domain array...')
         arr = self.hessian_arr
         sx,sy = self.start_point
@@ -454,6 +568,10 @@ class NeumannTracer(object):
         self.hessian_filled = True
 
     def build_graph(self):
+        '''Build a CriticalGraph with all the critical points of self as
+        nodes and all the lines of self.lines joining them.
+
+        '''
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -467,15 +585,15 @@ class NeumannTracer(object):
             line = self.lines[i]
             start_crit_type = self.crits_dict[start]
             if end is not None:
-                print end
-                if end in self.maxima:
-                    print 'maximum'
-                elif end in self.minima:
-                    print 'minimum'
-                elif end in self.saddles:
-                    print 'saddle'
-                else:
-                    print 'none'
+                # print end
+                # if end in self.maxima:
+                #     print 'maximum'
+                # elif end in self.minima:
+                #     print 'minimum'
+                # elif end in self.saddles:
+                #     print 'saddle'
+                # else:
+                #     print 'none'
                 #print self.crits_dict
                 end_crit_type = self.crits_dict[end]
             else:
@@ -487,6 +605,10 @@ class NeumannTracer(object):
         self.graph_built = True
 
     def get_recognised_domains(self):
+        '''Get the list of all closed Neumann domains in self.graph (created
+        by self.build_graph)
+
+        '''
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -500,6 +622,12 @@ class NeumannTracer(object):
         self.domains = domains
 
     def build_everything(self,including_hessian=False):
+        '''
+        Build all the arrays and trace all the lines via the various methods of self.
+
+        Args:
+        - including_hessian: Default False, whether to bother doing the Hessian array (this can be quite slow to make)
+        '''
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -512,7 +640,14 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
-    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_recognised_domains=False,show_domain_patches=False):
+    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False):
+        '''
+        Plot and return a graph showing (optionally):
+        - Neumann lines
+        - Hessian domains
+        - Hessian eigenvectors at detected saddles
+        - Coloured patches representing each closed Neumann domain
+        '''
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -549,7 +684,9 @@ class NeumannTracer(object):
                 ps = domain.as_closed_curve()
                 patch = Polygon(ps,alpha=0.7,
                                 color=colour,
-                                linestyle=n.random.choice(patch_linestyles))
+                                linestyle=n.random.choice(patch_linestyles),
+                                linewidth=2,
+            )
                 ax.add_patch(patch)
 
         legend_entries = []
@@ -565,6 +702,10 @@ class NeumannTracer(object):
         if len(degenerate) > 0:
             ax.scatter(degenerate[:,0],degenerate[:,1],c='orange')
             legend_entries.append('degenerate')
+
+        if show_domain_patches:
+            ax.contour(plotarr,levels=[0],alpha=0.3,linestyles=['--'])
+        else:
             ax.contour(plotarr,levels=[0],alpha=0.2)
 
         if trace_lines:
