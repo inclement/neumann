@@ -49,7 +49,7 @@ class CriticalGraph(dict):
             for i in range(len(lines)):
                 line = lines[i]
                 first = line[0]
-                second = line[1]
+                second = line[-1] # Strictly could fail in *very* highly pathological case
                 angle = n.arctan2(second[1]-first[1],second[0]-first[0])
                 angles[i] = angle
             order = n.argsort(angles)
@@ -620,6 +620,8 @@ class NeumannTracer(object):
         self.found_domains = True
         domains = self.graph.get_closed_domains()
         self.domains = domains
+
+        return domains
 
     def build_everything(self,including_hessian=False):
         '''
