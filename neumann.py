@@ -77,8 +77,19 @@ class CriticalGraph(dict):
                 for line in self[start][1]:
                     dom = self.get_domain_from(line)
                     if dom is not None:
-                        domains.append(self.get_domain_from(line))
-        return domains
+                        domains.append(dom)
+                        # for nl in dom.lines:
+                        #     if nl.end not in blighted_starts:
+                        #         blighted_starts.append(nl.end)
+
+        domain_keys = []
+        unique_domains = []
+        for domain in domains:
+            vertices = domain.vertices()
+            if vertices not in domain_keys:
+                domain_keys.append(vertices)
+                unique_domains.append(domain)
+        return unique_domains
     def get_domain_from(self,line,dir='clockwise'):
         '''
         Returns the closed domain (or None if the algorithm fails)
@@ -169,6 +180,11 @@ class NeumannDomain(object):
     def number_of_sides(self):
         '''Returns the number of domain walls.'''
         return len(self.lines)
+    def vertices(self):
+        vertex_set = set()
+        for line in self.lines:
+            vertex_set.add(line.end)
+        return vertex_set
     def __str__(self):
         return '<Neumann domain with {0} saddles, {1} maxima, {2} minima>'.format(self.sadnum,self.maxnum,self.minnum)
     def __repr__(self):
