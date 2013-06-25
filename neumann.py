@@ -90,6 +90,16 @@ class CriticalGraph(dict):
                 domain_keys.append(vertices)
                 unique_domains.append(domain)
         return unique_domains
+    def get_domain_areas(self):
+        domains = self.get_closed_domains()
+        areas = []
+        i = 0
+        for domain in domains:
+            lineprint('\rGetting area of domain %d / %d' % (i,len(domains)),False)
+            i += 1
+            area = domain.area()
+            areas.append(area)
+        return areas
     def get_domain_from(self,line,dir='clockwise'):
         '''
         Returns the closed domain (or None if the algorithm fails)
@@ -185,6 +195,8 @@ class NeumannDomain(object):
         for line in self.lines:
             vertex_set.add(line.end)
         return vertex_set
+    def area(self):
+        return area_from_border([line.points for line in self.lines])
     def __str__(self):
         return '<Neumann domain with {0} saddles, {1} maxima, {2} minima>'.format(self.sadnum,self.maxnum,self.minnum)
     def __repr__(self):
@@ -633,12 +645,18 @@ class NeumannTracer(object):
             self.trace_neumann_lines()
         if not self.graph_built:
             self.build_graph()
+        if self.found_domains:
+            return self.domains
         self.found_domains = True
         domains = self.graph.get_closed_domains()
         self.domains = domains
 
         return domains
-
+    def get_domain_areas(self):
+        if not self.graph_built:
+            self.build_graph()
+        return self.graph.get_domain_areas()
+        
     def build_everything(self,including_hessian=False):
         '''
         Build all the arrays and trace all the lines via the various methods of self.
@@ -1079,3 +1097,84 @@ def angle_index(line,lines):
         return n.argmax(angle > angles)
     else:
         return 0
+
+def area_from_border(lines,numsteps=100):
+    maxxs = map(lambda j: n.max(j[:,0]),lines)
+    minxs = map(lambda j: n.min(j[:,0]),lines)
+    maxys = map(lambda j: n.max(j[:,1]),lines)
+    minys = map(lambda j: n.min(j[:,1]),lines)
+
+    minx = n.min(minxs)
+    maxx = n.max(maxxs)
+    miny = n.min(minys)
+    maxy = n.max(maxys)
+
+    dx = (maxx - minx) / numsteps
+    dy = (maxy - miny) / numsteps
+
+    fullpath = n.vstack(map(lambda j: j[:-1],lines))
+
+    area = 0.0
+
+    for x in n.linspace(minx-0.005*dx,maxx+0.005*dx,numsteps):
+        testline = n.array([[x,miny],[x,maxy]])
+        #print 'testline',testline
+        p = testline[0]
+        r = testline[1] - testline[0]
+        intersections = [] 
+        for i in range(len(fullpath)):
+            q = fullpath[i]
+            s = fullpath[(i+1) % len(fullpath)] - q
+            #print minx,maxx,miny,maxy,' -> ',p,r,q,s
+            intersect,t,u = doVectorsCross(p,r,q,s)
+            if intersect:
+                intersect_y = (p + u*r)[1]
+                intersections.append(intersect_y)
+        if len(intersections) % 2 != 0:
+            print 'Number of intersections is not even!'
+        elif len(intersections) == 2:
+            bottom = n.min(intersections)
+            top = n.max(intersections)
+            area += dx*(top-bottom)
+        elif len(intersections) == 4:
+            intersections = n.sort(intersections)
+            area += dx*(intersections[1]-intersections[0] + intersections[3]-intersections[2])
+        #print len(intersections),'intersections found',intersections
+    return area
+        
+            
+    
+    return (minx,maxx,miny,maxy)
+    
+def img_interpolate(x,y,arr):
+    roundx = int(n.floor(x))
+    roundy = int(n.floor(y))
+    dx = roundx - x
+    dy = roundy - y
+
+    return (arr[roundx,roundy]*(1-dx)*(1-dy) +
+            arr[roundx+1,roundy]*dx*(1-dy) +
+            arr[roundx,roundy+1]*(1-dx)*dy +
+            arr[roundx+1,roundy+1]*dx*dy)
+
+def doVectorsCross(p,r,q,s):
+    """
+    Takes four vectors p,dp and q,dq, then tests whether they cross in
+    the dp/dq region. Returns this boolean, and the point where the
+    crossing actually occurs.
+    """
+    p = n.float64(p)
+    r = n.float64(r)
+    q = n.float64(q)
+    s = n.float64(s)
+    if n.abs(n.cross(r,s)) < 0.00001:
+        return (False,0.,0.)
+
+    t = n.cross(q-p,s) / n.cross(r,s)
+
+    if 0.0 < t < 1.0:
+        u = n.cross(q-p,r) / n.cross(r,s)
+        if 0.0 < u < 1.0:
+            return (True,t,u)
+        return (False,t,u)
+    return (False,t,-1.0)
