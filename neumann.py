@@ -136,7 +136,7 @@ class CriticalGraph(dict):
             start = curline.start
             end = curline.end
         return NeumannDomain(lines)
-    def get_crit_dimension_dists(self):
+    def get_crit_degree_dists(self):
         '''Returns the dimension (number of lines going in/out) of each
         critical point in self. Order is maxima, minima, saddles.
 
@@ -652,6 +652,57 @@ class NeumannTracer(object):
         self.domains = domains
 
         return domains
+
+    def get_critical_degrees(self):
+        ds = self.get_recognised_domains()
+
+        maxima = self.maxima
+        minima = self.minima
+
+        maxdegrees = {}
+        mindegrees = {}
+        for node in maxima:
+            lines = self.graph[node][1]
+            maxdegrees[node] = len(lines)
+        for node in minima:
+            lines = self.graph[node][1]
+            mindegrees[node] = len(lines)
+
+        maxdomaindegrees = {key: 0 for key in maxima}
+        mindomaindegrees = {key: 0 for key in minima}
+        for domain in ds:
+            lines = domain.lines
+            for line in lines:
+                end = line.end
+                if end in maxdomaindegrees:
+                    maxdomaindegrees[end] += 1
+                if end in mindomaindegrees:
+                    mindomaindegrees[end] += 1
+
+        maxrealdegrees = []
+        minrealdegrees = []
+        realmaxima = []
+        realminima = []
+        for node in maxima:
+            #print maxdegrees[node],maxdomaindegrees[node]
+            line_degree = maxdegrees[node]
+            domain_degree = maxdomaindegrees[node]
+            if line_degree == domain_degree:
+                maxrealdegrees.append(line_degree)
+                realmaxima.append(node)
+        for node in minima:
+            line_degree = mindegrees[node]
+            domain_degree = mindomaindegrees[node]
+            if line_degree == domain_degree:
+                minrealdegrees.append(line_degree)
+                realminima.append(node)
+            #print mindegrees[node],mindomaindegrees[node]
+        return maxrealdegrees, minrealdegrees
+
+            
+        
+        
+    
     def get_domain_areas(self):
         if not self.graph_built:
             self.build_graph()
@@ -676,7 +727,7 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
-    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False):
+    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,figsize=None):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -774,6 +825,9 @@ class NeumannTracer(object):
                 ys2 = [y-3*dir2[1],y,y+3*dir2[1]]
                 ax.plot(xs1,ys1,color='black',linewidth=2)
                 ax.plot(xs2,ys2,color='black',linewidth=2)
+
+        if figsize is not None:
+            fig.set_size_inches(figsize[0],figsize[1])
 
         return fig,ax
 
