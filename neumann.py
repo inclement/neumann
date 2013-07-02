@@ -699,9 +699,25 @@ class NeumannTracer(object):
             #print mindegrees[node],mindomaindegrees[node]
         return maxrealdegrees, minrealdegrees
 
-            
-        
-        
+    def get_critical_degree_dists(self):
+        maxdegs, mindegs = self.get_critical_degrees()
+        maxdegs = n.array(maxdegs, dtype=n.float64)
+        mindegs = n.array(mindegs, dtype=n.float64)
+
+        max3 = n.sum(maxdegs == 3)
+        max4 = n.sum(maxdegs == 4)
+        max5 = n.sum(maxdegs == 5)
+        min3 = n.sum(mindegs == 3)
+        min4 = n.sum(mindegs == 4)
+        min5 = n.sum(mindegs == 5)
+
+        totdegrees = float(max3 + max4 + max5 + min3 + min4 + min5)
+
+        frac3 = float(max3 + min3) / totdegrees
+        frac4 = float(max4 + min4) / totdegrees
+        frac5 = float(max5 + min5) / totdegrees
+
+        return (frac3, frac4, frac5)
     
     def get_domain_areas(self):
         if not self.graph_built:
@@ -872,8 +888,9 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
                 return (points,None)
 
         nearx,neary = int(n.round(cx)),int(n.round(cy))
-        nearx %= xnum
-        neary %= ynum
+        if to_edges in ['periodic','fourier']: # Need extra condition with fourier to get the signs right
+            nearx %= xnum
+            neary %= ynum
         if (nearx,neary) in critdict:
             points.append((nearx,neary))
             return (points,(nearx,neary))
@@ -1064,7 +1081,7 @@ def random_wave_function(number=50,wvmag=5,seed=0):
     generator.seed(seed)
 
     amps = generator.normal(size=number)
-    phases = generator.rand(number)
+    phases = 2*n.pi*generator.rand(number)
     wvs = n.zeros((number,2),dtype=n.float64)
     for i in range(number):
         wv = generator.normal(size=2)
@@ -1072,16 +1089,22 @@ def random_wave_function(number=50,wvmag=5,seed=0):
         wv *= wvmag
         wvs[i] = wv
 
+    # print 'wvs'
+    # print wvs
+    # print 'phases'
+    # print phases
+
     def func(x,y):
         res = 0.0
         xyarr = n.array([x,y],dtype=n.float64)
-        interior = wvs.dot(xyarr)*2*n.pi/wvmag + phases
+        interior = wvs.dot(xyarr) + phases
         exterior = amps*n.sin(interior)
         return n.sum(exterior)
         # for i in range(number):
         #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
         # return res
     return func
+    
 
 def mag(v):
     return n.sqrt(v.dot(v))
