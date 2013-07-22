@@ -18,7 +18,6 @@ class CriticalGraph(dict):
     dict setting.
 
     '''
-    
     def __init__(self,*args):
         super(CriticalGraph, self).__init__(*args)
         self.nodes_aligned = False
@@ -662,11 +661,17 @@ class NeumannTracer(object):
         maxdegrees = {}
         mindegrees = {}
         for node in maxima:
-            lines = self.graph[node][1]
-            maxdegrees[node] = len(lines)
+            if node in self.graph:
+                lines = self.graph[node][1]
+                maxdegrees[node] = len(lines)
+            else:
+                maxdegrees[node] = 0
         for node in minima:
-            lines = self.graph[node][1]
-            mindegrees[node] = len(lines)
+            if node in self.graph:
+                lines = self.graph[node][1]
+                mindegrees[node] = len(lines)
+            else:
+                mindegrees[node] = 0
 
         maxdomaindegrees = {key: 0 for key in maxima}
         mindomaindegrees = {key: 0 for key in minima}
@@ -1074,7 +1079,7 @@ def sanitise_line(l):
     return segs
         
 
-def random_wave_function(number=50,wvmag=5,seed=0):
+def random_wave_function(number=50, wvmag=5, seed=0):
     if seed == 0:
         seed = n.random.randint(10000000000)
     generator = n.random.RandomState()
@@ -1089,10 +1094,53 @@ def random_wave_function(number=50,wvmag=5,seed=0):
         wv *= wvmag
         wvs[i] = wv
 
-    # print 'wvs'
-    # print wvs
-    # print 'phases'
-    # print phases
+    def func(x,y):
+        res = 0.0
+        xyarr = n.array([x,y],dtype=n.float64)
+        interior = wvs.dot(xyarr) + phases
+        exterior = amps*n.sin(interior)
+        return n.sum(exterior)
+        # for i in range(number):
+        #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
+        # return res
+    return func
+
+def duofactors(k):
+    outs = []
+    for i in range(int(n.sqrt(k))+2):
+        for j in range(i,int(n.sqrt(k))+2):
+            if (i**2 + j**2) == k:
+                outs.append((i,j))
+    return outs
+
+def range_factors(a,b=None,best=False):
+    if b is None:
+        b = a
+        a = 0
+    results = zip(range(a,b), map(duofactors, range(a,b)))
+    if best:
+        bestnum = max([len(j[1]) for j in results])
+        results = filter(lambda j: len(j[1]) == bestnum, results)
+    return results
+
+def periodic_random_wave_function(number=50, scale=5, seed=0):
+    if seed == 0:
+        seed = n.random.randint(10000000000)
+    generator = n.random.RandomState()
+    generator.seed(seed)
+
+    possible_wvs = duofactors(scale)
+    possible_signs = map(n.array,[[1,1],[1,-1],[-1,1],[-1,-1]])
+
+    amps = generator.normal(size=number)
+    phases = 2*n.pi*generator.rand(number)
+    wvs = n.zeros((number,2), dtype=n.float64)
+    for i in range(number):
+        wv = n.array(possible_wvs[generator.randint(len(possible_wvs))], dtype=n.float64)
+        generator.shuffle(wv)
+        wv *= possible_signs[generator.randint(len(possible_signs))]
+        wv *= 2*n.pi/n.sqrt(scale/2.)
+        wvs[i] = wv
 
     def func(x,y):
         res = 0.0
@@ -1104,7 +1152,8 @@ def random_wave_function(number=50,wvmag=5,seed=0):
         #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
         # return res
     return func
-    
+
+
 
 def mag(v):
     return n.sqrt(v.dot(v))
