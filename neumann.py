@@ -239,7 +239,9 @@ class NeumannDomain(object):
             vertex_set.add(line.end)
         return vertex_set
     def area(self):
-        return area_from_border([line.points for line in self.lines])
+        return area_from_border(self.as_closed_curve())
+    def crude_area(self):
+        return crude_area_from_border([line.points for line in self.lines])
     def __str__(self):
         return '<Neumann domain with {0} saddles, {1} maxima, {2} minima>'.format(self.sadnum,self.maxnum,self.minnum)
     def __repr__(self):
@@ -354,6 +356,7 @@ class NeumannTracer(object):
             lineprint('\r\tx = {0} / {1}'.format(x,xnum),False)
             for y in range(ynum):
                 arr[x,y] = self.func(sx + x*dx, sy + y*dy)
+        print
         self.arr_filled = True
 
     def find_critical_points(self):
@@ -491,7 +494,7 @@ class NeumannTracer(object):
                 else:
                     direction = 'up'
                 diff = [coords[0]-saddlex,coords[1]-saddley]
-                points,endcoord = trace_gradient_line(coords[0] + 0.5*diff[0],coords[1] + 0.5*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
+                points,endcoord = trace_gradient_line(coords[0] + 0.1*diff[0],coords[1] + 0.1*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
                 if len(points) > 4:
                     points = points[4:]
                 else:
@@ -751,6 +754,10 @@ class NeumannTracer(object):
 
         ax.set_xlim(0,plotarr.shape[0])
         ax.set_ylim(0,plotarr.shape[1])
+
+ 
+        ax.set_xticks([])
+        ax.set_yticks([])
 
         if show_domain_patches:
             for domain in self.domains:
@@ -1190,7 +1197,7 @@ def range_factors(a,b=None,best=False):
         results = filter(lambda j: len(j[1]) == bestnum, results)
     return results
 
-def periodic_random_wave_function(number=50, scale=5, seed=0):
+def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
     if seed == 0:
         seed = n.random.randint(10000000000)
     generator = n.random.RandomState()
@@ -1218,6 +1225,8 @@ def periodic_random_wave_function(number=50, scale=5, seed=0):
         # for i in range(number):
         #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
         # return res
+    if returnall:
+        return func, (amps, wvs, phases)
     return func
 
 
@@ -1291,7 +1300,14 @@ def angle_index(line,lines):
     else:
         return 0
 
-def area_from_border(lines,numsteps=100):
+def area_from_border(lines):
+    area = 0.0
+    num = len(lines)
+    for i in range(len(lines)):
+        area += lines[i,0]*lines[(i+1) % num,1] - lines[i,1]*lines[(i+1) % num, 0]
+    return n.abs(area/2.)
+
+def crude_area_from_border(lines,numsteps=100):
     maxxs = map(lambda j: n.max(j[:,0]),lines)
     minxs = map(lambda j: n.min(j[:,0]),lines)
     maxys = map(lambda j: n.max(j[:,1]),lines)
@@ -1388,5 +1404,34 @@ def animate():
         a = NeumannTracer(300,300,n.pi/130,n.pi/130,f)
         a.plot(save='test2_{0:04}.png'.format(i))
 
+def periodic_animate(scale=5, number=50, frames=200, downscale=2):
+    length = int(100/float(downscale) * float(scale)/5.)
+    periodicity = n.sqrt(scale/2.)
 
+    f,d2 = periodic_random_wave_function(number, scale, returnall=True)
+    amps, wvs, phases = d2
+
+    for i in range(frames):
+        phases[0] += 2*n.pi/frames
+        def func(x,y):
+            res = 0.0
+            xyarr = n.array([x,y],dtype=n.float64)
+            interior = wvs.dot(xyarr) + phases
+            exterior = amps*n.sin(interior)
+            return n.sum(exterior)
+        a = NeumannTracer(length, length,
+                          periodicity/float(length), periodicity/float(length),
+                          func, to_edges=True)
+        a.plot(save='panim1_{0:04}.png'.format(i))
+
+
+def get_periodic_tracer(scale=5, number=50, downscale=2):
+    length = int(100/float(downscale) * float(scale)/5.)
+    periodicity = n.sqrt(scale/2.)
+    f = periodic_random_wave_function(number, scale)
+    tracer = NeumannTracer(length, length,
+                           periodicity/(2*length), periodicity/(2*length),
+                           f,
+                           to_edges='periodic')
+    return tracer
 
