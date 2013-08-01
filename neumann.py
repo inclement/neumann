@@ -2,11 +2,29 @@ import numpy as n
 from itertools import product
 from colorsys import hsv_to_rgb
 
+from matplotlib import interactive as mpl_interactive
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
+
+class UpsampleRegion(object):
+    def __init__(self,sx,sy,lx,ly,degree=1):
+        self.sx = sx
+        self.sy = sy
+        self.start = n.array([x,y])
+        self.lx = lx
+        self.ly = ly
+        self.degree = degree
+    def shape_parameters(self):
+        return (self.sx,self.sy,self.lx,self.ly)
+    def contains(self,x,y):
+        sx,sy,lx,ly = self.shape_parameters()
+        if (sx < x < (sx + lx)) and (sy < y < (sy+ly)):
+            return True
+        return False
+    
 
 class CriticalGraph(dict):
     '''A dict subclass representing the graph of Neumann nodes (critical
@@ -186,6 +204,32 @@ class NeumannDomain(object):
         for line in self.lines:
             points.append(line.points)
         return n.vstack(points)
+    def as_closed_curves(self):
+        '''Joins the component lines and returns a list of 2d arrays
+        describing sections of the domain cut by any boundary it
+        passes through.
+
+        '''
+        points = []
+        for line in self.lines:
+            points.append(line.points)
+        arr = n.vstack(points)
+        segs = []
+        curcut = 0
+
+        for i in range(len(arr)-1):
+            next = arr[i+1]
+            cur = arr[i]
+            if n.abs(next[0]-cur[0]) > 5 or n.abs(next[1]-cur[1]) > 5:
+                segs.append(arr[curcut:(i+1)])
+                curcut = i+1
+        if curcut < len(arr):
+            segs.append(arr[curcut:])
+        if len(segs)>2:
+            lastseg = segs.pop(-1)
+            segs[0] = n.vstack((lastseg,segs[0]))
+        return segs
+
     def number_of_sides(self):
         '''Returns the number of domain walls.'''
         return len(self.lines)
@@ -250,7 +294,7 @@ class NeumannTracer(object):
                 'periodic' (use periodic boundary conditions) or
                 'fourier' (periodic with a -1 factor if passing through the boundary).
     '''
-    def __init__(self,xnum,ynum,dx,dy,func,start_point=(0.0,0.0),to_edges=False):
+    def __init__(self,xnum,ynum,dx,dy,func,start_point=(0.0,0.0),to_edges=False,upsample_at=1000000):
         self.arr = n.zeros((xnum,ynum),dtype=n.float64)
         self.hessian_arr = n.zeros((xnum,ynum),dtype=n.float64)
         self.xnum = xnum
@@ -263,6 +307,7 @@ class NeumannTracer(object):
         self.start_point = start_point
         self.sx = start_point[0]
         self.sy = start_point[1]
+        self.upsample_at = upsample_at
 
         self.to_edges = to_edges
 
@@ -275,6 +320,8 @@ class NeumannTracer(object):
 
         self.graph = CriticalGraph()
         self.domains = []
+
+        self.upsample_regions = []
 
         self.lines = []
         self.start_points = []
@@ -330,6 +377,9 @@ class NeumannTracer(object):
         self.crits_dict = critical_points_to_index_dict(self.crits)
 
         self.found_crits = True
+
+    def critical_point_proximity_alert(self):
+        pass
 
     def prune_critical_points(self):
         '''Detects and removes points where two extrema border a single
@@ -419,6 +469,8 @@ class NeumannTracer(object):
             adjs = n.zeros(6,dtype=n.float64)
             for i in range(6):
                 adjs[i] = arr[ais[i][0] % self.xnum, ais[i][1] % self.ynum]
+                # Always checks periodicity, as saddles on the
+                # boundary are already ignored by get_critical_points
 
             adjs = adjs - val
 
@@ -431,101 +483,7 @@ class NeumannTracer(object):
                 if n.sign(next_adj) != n.sign(cur_adj):
                     sign = n.sign(cur_adj)
                     tracing_start_points.append([sign,ais[i]])
-                    # angle = n.average(current_region_angles)
-                    # aix = n.cos(angle) + saddlex
-                    # aiy = n.sin(angle) + saddley
-                    # tracing_start_points.append([sign,[aix,aiy]])
-                    # # print current_region_angles, n.average(current_region_angles)
-                    # # print 'ais',aix,aiy,ais[i]
-                    # current_region_angles = []
                     
-
-            # sx,sy = self.start_point
-            # dx,dy = self.dr
-            # nearby_angles = n.linspace(0,2*n.pi,50)
-            # nearby_xs = 0.75*n.cos(nearby_angles) + saddlex
-            # nearby_ys = 0.75*n.sin(nearby_angles) + saddley
-            # nearby_vals = n.zeros(len(nearby_angles),dtype=n.float64)
-            # for i in range(len(nearby_angles)):
-            #     nearby_vals[i] = self.func(sx + nearby_xs[i]*dx, sy + nearby_ys[i]*dy)
-            # sorted_vals = n.argsort(nearby_vals)
-
-            # direction_indices = get_saddle_directions(nearby_vals-val)
-            # for entry in direction_indices:
-            #     sign = entry[0]
-            #     index = entry[1]
-            #     tracing_start_points.append((sign,[nearby_xs[index],nearby_ys[index]]))
-            
-            # tracing_start_points.append((-1.0,[nearby_xs[sorted_vals[0]],nearby_ys[sorted_vals[0]]]))
-            # tracing_start_points.append((1.0,[nearby_xs[sorted_vals[-1]],nearby_ys[sorted_vals[-1]]]))
-
-            # angle_1 = nearby_angles[sorted_vals[0]]
-            # angle_2 = nearby_angles[sorted_vals[-1]]
-
-            # angle_between = n.abs(angle_1 - angle_2)
-            # diff_from_rightangle = n.pi/2 - angle_between
-            # if angle_2 > angle_1:
-            #     angle_2 += diff_from_rightangle/2.
-            #     angle_1 -= diff_from_rightangle/2.
-            # else:
-            #     angle_1 += diff_from_rightangle/2.
-            #     angle_2 -= diff_from_rightangle/2.
-
-            # p1 = [1.75*n.cos(angle_1) + saddlex, 1.75*n.sin(angle_1) + saddley]
-            # p2 = [1.75*n.cos(angle_2) + saddlex, 1.75*n.sin(angle_2) + saddley]
-            # angle_1 += n.pi
-            # angle_2 += n.pi
-            # p3 = [1.75*n.cos(angle_1) + saddlex, 1.75*n.sin(angle_1) + saddley]
-            # p4 = [1.75*n.cos(angle_2) + saddlex, 1.75*n.sin(angle_2) + saddley]
-            # ps = [p1,p2,p3,p4]
-
-            # v1 = self.func(sx + p1[0]*dx, sy + p1[1]*dy)
-            # v2 = self.func(sx + p2[0]*dx, sy + p2[1]*dy)
-            # v3 = self.func(sx + p3[0]*dx, sy + p3[1]*dy)
-            # v4 = self.func(sx + p4[0]*dx, sy + p4[1]*dy)
-            # vals = [v1,v2,v3,v4]
-
-            # for i in range(4):
-            #     p = ps[i]
-            #     v = vals[i]
-            #     if v < val:
-            #         tracing_start_points.append([-1.0,p])
-            #     else:
-            #         tracing_start_points.append([1.0,p])
-
-            # if n.round(n.sum(map(lambda j: j[0],tracing_start_points))) != 0.0:
-            #     totdir = n.sum(map(lambda j: j[0],tracing_start_points))
-            #     if tracing_start_points[0][0] != tracing_start_points[2][0]:
-            #         if totdir > 0:
-            #             tracing_start_points[0][0] = -1.0
-            #             tracing_start_points[2][0] = -1.0
-            #         else:
-            #             tracing_start_points[0][0] = 1.0
-            #             tracing_start_points[2][0] = 1.0
-            #     elif tracing_start_points[1][0] != tracing_start_points[3][0]:
-            #         if totdir > 0:
-            #             tracing_start_points[1][0] = -1.0
-            #             tracing_start_points[3][0] = -1.0
-            #         else:
-            #             tracing_start_points[1][0] = 1.0
-            #             tracing_start_points[3][0] = 1.0
-
-            #print tracing_start_points
-
-            # tracing_start_points.append((-1.0,[0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]))
-            # tracing_start_points.append((1.0,[0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]))
-            # angle_1 += n.pi
-            # angle_2 += n.pi
-            # tracing_start_points.append((-1.0,[0.75*n.cos(angle_1) + saddlex, 0.75*n.sin(angle_1) + saddley]))
-            # tracing_start_points.append((1.0,[0.75*n.cos(angle_2) + saddlex, 0.75*n.sin(angle_2) + saddley]))
-
-            # for i in range(6):
-            #     cur_adj = adjs[i]
-            #     next_adj = adjs[(i+1) % 6]
-            #     if n.sign(next_adj) != n.sign(cur_adj):
-            #         sign = n.sign(cur_adj)
-            #         tracing_start_points.append((sign,ais[i]))
-
             for coords in tracing_start_points:
                 sign,coords = coords
                 if sign == 1.0:
@@ -534,8 +492,10 @@ class NeumannTracer(object):
                     direction = 'up'
                 diff = [coords[0]-saddlex,coords[1]-saddley]
                 points,endcoord = trace_gradient_line(coords[0] + 0.5*diff[0],coords[1] + 0.5*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
-                if len(points) > 5:
-                    points = points[5:]
+                if len(points) > 4:
+                    points = points[4:]
+                else:
+                    points = points[-1:]
                 points = [saddle] + points
 
                 self.start_points.append(tuple(saddle))
@@ -593,6 +553,7 @@ class NeumannTracer(object):
                 arr[x,y] = hessian_det(self.func, sx + x*dx, sy + y*dy, dx, dy)
         
         self.hessian_filled = True
+        lineprint()
 
     def build_graph(self):
         '''Build a CriticalGraph with all the critical points of self as
@@ -748,7 +709,7 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
-    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,figsize=None):
+    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,figsize=None,save=False):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -756,6 +717,11 @@ class NeumannTracer(object):
         - Hessian eigenvectors at detected saddles
         - Coloured patches representing each closed Neumann domain
         '''
+        if save:
+            mpl_interactive(False)
+        else:
+            mpl_interactive(True)
+
         if not self.arr_filled:
             self.fill_arr()
         if not self.found_crits:
@@ -789,12 +755,17 @@ class NeumannTracer(object):
         if show_domain_patches:
             for domain in self.domains:
                 colour = hsv_to_rgb(n.random.random(),1.,1.)
-                ps = domain.as_closed_curve()
-                patch = Polygon(ps,alpha=0.7,
-                                color=colour,
-                                linestyle=n.random.choice(patch_linestyles),
-                                linewidth=2,
-            )
+                #ps = domain.as_closed_curve()
+                ps = domain.as_closed_curves()
+                # if len(ps)>0:
+                #     print 'ps are',ps
+                for p in ps:
+                    patch = Polygon(p,alpha=0.7,
+                                    closed=True,
+                                    color=colour,
+                                    linestyle=n.random.choice(patch_linestyles),
+                                    linewidth=2,
+                                    )
                 ax.add_patch(patch)
 
         legend_entries = []
@@ -819,13 +790,16 @@ class NeumannTracer(object):
         if trace_lines:
             for line in self.lines:
                 segs = sanitise_line(line)
-                for seg in segs:
+                # if len(segs) > 0:
+                #     print len(segs),map(len,segs),'segs are',segs
+                for seg in segs: #filter(lambda j: len(j)==1, segs):
                     ax.plot(seg[:,0],seg[:,1],'-',color='purple')
-                ax.plot(line[:,0],line[:,1],'-',color='purple')
+                #ax.plot(line[:,0],line[:,1],'-',color='purple')
 
         if plot_hessian:
-            ax.imshow(n.sign(self.hessian_arr),cmap='binary',alpha=0.5)
-            ax.contour(self.hessian_arr,levels=[0],linewidths=2,alpha=0.6,color='cyan')
+            hessian_arr = n.rot90(self.hessian_arr[::-1],3)
+            ax.imshow(n.sign(hessian_arr),cmap='binary',interpolation='none',alpha=0.5)
+            ax.contour(hessian_arr,levels=[0],linewidths=2,alpha=0.6,color='cyan')
         
         self.figax = (fig,ax)
 
@@ -850,7 +824,77 @@ class NeumannTracer(object):
         if figsize is not None:
             fig.set_size_inches(figsize[0],figsize[1])
 
+        if save:
+            filen = save
+            fig.savefig(filen)
+
         return fig,ax
+    def plot3d(self,clf=True):
+        import mayavi.mlab as may
+        if clf:
+            may.clf()
+
+        if not self.arr_filled:
+            self.fill_arr()
+        if not self.found_crits:
+            self.find_critical_points()
+        # if not self.traced_lines and trace_lines:
+        #     self.trace_neumann_lines()
+        # if not self.hessian_filled and plot_hessian:
+        #     self.make_hessian_array()
+        # if not self.found_domains and show_domain_patches:
+        #     self.get_recognised_domains()
+
+        plotarr = n.rot90(self.arr[::-1],3)
+        plotarr = self.arr
+        
+        #fig,ax = plot_arr_with_crits(plotarr,self.crits)
+        maxima,minima,saddles,degenerate = self.crits
+        maxima = n.array(maxima)
+        minima = n.array(minima)
+        saddles = n.array(saddles)
+        degenerate = n.array(degenerate)
+
+        may.surf(plotarr,colormap='RdYlBu')
+        may.contour_surf(plotarr,contours=[0])
+
+        hmin = n.min(plotarr)
+        hmax = n.max(plotarr)
+        dh = (hmin-hmax)/20
+
+        saddlezs = []
+        if len(saddles) > 0:
+            for saddle in saddles:
+                x,y = saddle
+                saddlezs.append(self.arr[x,y])
+        saddlezs = n.array(saddlezs)
+
+        maximumzs = []
+        if len(maxima) > 0:
+            for maximum in maxima:
+                x,y = maximum
+                maximumzs.append(self.arr[x,y])
+        maximumzs = n.array(maximumzs)
+
+        minimumzs = []
+        if len(minima) > 0:
+            for minimum in minima:
+                x,y = minimum
+                minimumzs.append(self.arr[x,y])
+        minimumzs = n.array(minimumzs)
+
+        extlen = self.arr.shape[0]
+        saddleextent = [-extlen/2.0,extlen/2.0,-extlen/2.0,extlen/2.0,n.min(saddlezs),n.max(saddlezs)]
+        minimumextent = [-extlen/2.0,extlen/2.0,-extlen/2.0,extlen/2.0,n.min(minimumzs),n.max(minimumzs)]
+        maximumextent = [-extlen/2.0,extlen/2.0,-extlen/2.0,extlen/2.0,n.min(maximumzs),n.max(maximumzs)]
+
+        if len(saddles) > 0:
+            may.points3d(saddles[:,0],saddles[:,1],saddlezs,color=(1,1,0),scale_factor=1.5,extent=saddleextent)
+        if len(minima) > 0:
+            may.points3d(minima[:,0],minima[:,1],minimumzs,color=(1,0,0),scale_factor=1.5,extent=minimumextent)
+        if len(saddles) > 0:
+            may.points3d(maxima[:,0],maxima[:,1],maximumzs,color=(0,0,1),scale_factor=1.5,extent=maximumextent)
+            
 
 def get_filled_array(xnum,ynum,dx,dy,func,start_point=(0.0,0.0)):
     arr = n.zeros((xnum,ynum),dtype=n.float64)
@@ -880,11 +924,23 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
 
         if len(points)>20:
             if mag(n.array([cx,cy])-n.array(points[-20])) < 0.75:
-                print 'new points',[int(n.round(cx)),int(n.round(cy))]
+                #print 'new points',[int(n.round(cx)),int(n.round(cy))]
                 return (points,[int(n.round(cx)),int(n.round(cy))])
-        
-        points.append([cx,cy])
 
+        # if len(points) == 3:
+        #     print 'extra test'
+        #     p = n.array(points[-3])
+        #     dp = n.array(points[-2]) - n.array(points[-3])
+        #     q = n.array(points[-1])
+        #     dq = n.array([cx,cy])-n.array(q)
+        #     print p,dp,q,dq
+        #     cross,wx,wy = doVectorsCross(p,dp,q,dq)
+        #     print cross,wx,wy
+        #     if cross:
+        #         cx -= 0.5*n.cos(angle)
+        #         cy -= 0.5*n.sin(angle)
+        points.append([cx,cy])
+        
         if cx < 0 or cx > xnum or cy < 0 or cy > ynum:
             if to_edges in ['periodic','fourier']: # Need extra condition with fourier to get the signs right
                 cx %= xnum
@@ -897,14 +953,22 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
             nearx %= xnum
             neary %= ynum
         if (nearx,neary) in critdict:
-            points.append((nearx,neary))
-            return (points,(nearx,neary))
+            crit_type = critdict[nearx, neary]
+            if ((crit_type == 'maximum' and direction == 'down') or
+                (crit_type == 'minimum' and direction == 'up')):
+            # if crit_type in ['maximum','minimum']:
+                #print (nearx,neary),crit_type,direction
+                points.append((nearx,neary))
+                return (points,(nearx,neary))
         else:
-            for indices in all_adj_indices:
+            for indices in safe_adj_indices:
                 if (nearx + indices[0],neary + indices[1]) in critdict:
                     coords = (nearx + indices[0], neary + indices[1])
                     crit_type = critdict[coords]
-                    if crit_type in ['maximum','minimum']:
+                    if ((crit_type == 'maximum' and direction == 'down') or
+                        (crit_type == 'minimum' and direction == 'up')):
+                    # if crit_type in ['maximum','minimum']:
+                        #print (nearx,neary),crit_type,direction
                         points.append(coords)
                         return (points,coords)
 
@@ -947,6 +1011,7 @@ def critical_points_to_index_dict(crits):
 even_adj_indices = n.array([[-1,-1],[-1,0],[0,1],[1,0],[1,-1],[0,-1]])
 odd_adj_indices =  n.array([[-1,0],[-1,1],[0,1],[1,1],[1,0],[0,-1]])
 all_adj_indices = n.array([[-1,-1],[-1,0],[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1]])
+safe_adj_indices = n.array([[-1,0],[0,1],[1,0],[0,-1]])
 #even_adj_indices = n.array([[-1,-1],[-1,0],[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1]])
 #odd_adj_indices = even_adj_indices
 def get_critical_points(arr,to_edges=False):
@@ -1079,7 +1144,7 @@ def sanitise_line(l):
     return segs
         
 
-def random_wave_function(number=50, wvmag=5, seed=0):
+def random_wave_function(number=50, wvmag=5, seed=0,returnall=False):
     if seed == 0:
         seed = n.random.randint(10000000000)
     generator = n.random.RandomState()
@@ -1103,6 +1168,8 @@ def random_wave_function(number=50, wvmag=5, seed=0):
         # for i in range(number):
         #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
         # return res
+    if returnall:
+        return (func,(amps,wvs,phases))
     return func
 
 def duofactors(k):
@@ -1304,3 +1371,22 @@ def doVectorsCross(p,r,q,s):
             return (True,t,u)
         return (False,t,u)
     return (False,t,-1.0)
+
+def animate():
+    f,d2 = random_wave_function(50,10,returnall=True)
+
+    amps,wvs,phases = d2
+
+    for i in range(200):
+        phases[0] += 2*n.pi/200
+        def func(x,y):
+            res = 0.0
+            xyarr = n.array([x,y],dtype=n.float64)
+            interior = wvs.dot(xyarr) + phases
+            exterior = amps*n.sin(interior)
+            return n.sum(exterior)
+        a = NeumannTracer(300,300,n.pi/130,n.pi/130,f)
+        a.plot(save='test2_{0:04}.png'.format(i))
+
+
+
