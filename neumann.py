@@ -116,6 +116,7 @@ class CriticalGraph(dict):
             i += 1
             area = domain.area()
             areas.append(area)
+        print # Lineprint newline
         return areas
     def get_domain_from(self,line,dir='clockwise'):
         '''
@@ -156,10 +157,6 @@ class CriticalGraph(dict):
     def get_crit_degree_dists(self):
         '''Returns the dimension (number of lines going in/out) of each
         critical point in self. Order is maxima, minima, saddles.
-
-        Currently returns dubious (i.e. wrong) statistics due to not
-        taking account of critical points at the boundary having the
-        wrong number of detected lines.
 
         '''
         sadnums = []
@@ -229,6 +226,12 @@ class NeumannDomain(object):
             lastseg = segs.pop(-1)
             segs[0] = n.vstack((lastseg,segs[0]))
         return segs
+    def as_sanitised_curve(self):
+        '''Joins the component lines and shifts by the width of the torus if
+the cell crosses a boundary
+
+        '''
+        pass
 
     def number_of_sides(self):
         '''Returns the number of domain walls.'''
@@ -495,6 +498,18 @@ class NeumannTracer(object):
                     direction = 'up'
                 diff = [coords[0]-saddlex,coords[1]-saddley]
                 points,endcoord = trace_gradient_line(coords[0] + 0.1*diff[0],coords[1] + 0.1*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
+
+                # Check here whether the line has gone in totally the wrong direction. Try a simple retest if so.
+                if endcoord is not None and False:
+                    origangle = n.arctan2(coords[1]-saddley,coords[0]-saddlex)
+                    endangle = n.arctan2(endcoord[1]-saddley,endcoord[0]-saddlex)
+                    angle_diff = (endangle % (2*n.pi)) - (origangle % (2*n.pi))
+                    if angle_diff > n.pi:
+                        angle_diff -= n.pi
+                    if angle_diff > n.pi/2:
+                        print 'resampling line',origangle,endangle,'from',coords
+                        points,endcoord = trace_gradient_line(coords[0] + 0.5*diff[0],coords[1] + 0.5*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
+                
                 if len(points) > 4:
                     points = points[4:]
                 else:
@@ -673,20 +688,33 @@ class NeumannTracer(object):
         maxdegs = n.array(maxdegs, dtype=n.float64)
         mindegs = n.array(mindegs, dtype=n.float64)
 
+        max2 = n.sum(maxdegs == 2)
         max3 = n.sum(maxdegs == 3)
         max4 = n.sum(maxdegs == 4)
         max5 = n.sum(maxdegs == 5)
+        max6 = n.sum(maxdegs == 6)
+        max7 = n.sum(maxdegs == 7)
+        max8 = n.sum(maxdegs == 8)
+        min2 = n.sum(mindegs == 2)
         min3 = n.sum(mindegs == 3)
         min4 = n.sum(mindegs == 4)
         min5 = n.sum(mindegs == 5)
+        min6 = n.sum(mindegs == 6)
+        min7 = n.sum(mindegs == 7)
+        min8 = n.sum(mindegs == 8)
 
-        totdegrees = float(max3 + max4 + max5 + min3 + min4 + min5)
+        totdegrees = float(max2 + max3 + max4 + max5 + max6 + max7 + max8 +
+                           min2 + min3 + min4 + min5 + min6 + min7 + min8)
 
+        frac2 = float(max2 + min2) / totdegrees
         frac3 = float(max3 + min3) / totdegrees
         frac4 = float(max4 + min4) / totdegrees
         frac5 = float(max5 + min5) / totdegrees
+        frac6 = float(max6 + min6) / totdegrees
+        frac7 = float(max7 + min7) / totdegrees
+        frac8 = float(max8 + min8) / totdegrees
 
-        return (frac3, frac4, frac5)
+        return n.array(zip(range(2,9),(frac2, frac3, frac4, frac5, frac6, frac7, frac8)))
     
     def get_domain_areas(self):
         if not self.graph_built:
@@ -712,7 +740,7 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
-    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,figsize=None,save=False):
+    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,print_patch_areas=False,figsize=None,save=False):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -773,7 +801,12 @@ class NeumannTracer(object):
                                     linestyle=n.random.choice(patch_linestyles),
                                     linewidth=2,
                                     )
-                ax.add_patch(patch)
+                    ax.add_patch(patch)
+                if print_patch_areas:
+                    area = domain.area()
+                    pos = n.average(p,axis=0)
+                    ax.text(pos[0],pos[1],'{:.1f}'.format(area))
+                    
 
         legend_entries = []
         if len(maxima) > 0:
@@ -1388,21 +1421,28 @@ def doVectorsCross(p,r,q,s):
         return (False,t,u)
     return (False,t,-1.0)
 
-def animate():
+def animate(filen='test',path='onephase', number=200):
     f,d2 = random_wave_function(50,10,returnall=True)
 
     amps,wvs,phases = d2
 
-    for i in range(200):
-        phases[0] += 2*n.pi/200
+    for i in range(number):
+        if path == 'allphase':
+            phases += 2*n.pi/number
+        elif path[:9] == 'manyphase':
+            val = int(path[9:])
+            phases[:val] += 2*n.pi/number
+        else:
+            phases[0] += 2*n.pi/number
         def func(x,y):
             res = 0.0
             xyarr = n.array([x,y],dtype=n.float64)
             interior = wvs.dot(xyarr) + phases
             exterior = amps*n.sin(interior)
             return n.sum(exterior)
-        a = NeumannTracer(300,300,n.pi/130,n.pi/130,f)
-        a.plot(save='test2_{0:04}.png'.format(i))
+        a = NeumannTracer(300,300,n.pi/190,n.pi/190,f)
+        a.plot(save='{0}_{1:04}.png'.format(filen,i))
+        del a # For some reason, the reference count builds up?
 
 def periodic_animate(scale=5, number=50, frames=200, downscale=2):
     length = int(100/float(downscale) * float(scale)/5.)
@@ -1425,13 +1465,15 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2):
         a.plot(save='panim1_{0:04}.png'.format(i))
 
 
-def get_periodic_tracer(scale=5, number=50, downscale=2):
+def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
     length = int(100/float(downscale) * float(scale)/5.)
     periodicity = n.sqrt(scale/2.)
-    f = periodic_random_wave_function(number, scale)
+    f, d2 = periodic_random_wave_function(number, scale, returnall=True)
     tracer = NeumannTracer(length, length,
-                           periodicity/(2*length), periodicity/(2*length),
+                           periodicity/(1.*length), periodicity/(1.*length),
                            f,
                            to_edges='periodic')
+    if returnall:
+        return tracer, f, d2
     return tracer
 
