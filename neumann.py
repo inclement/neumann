@@ -65,9 +65,14 @@ class CriticalGraph(dict):
             angles = n.zeros(len(lines),dtype=n.float64)
             for i in range(len(lines)):
                 line = lines[i]
+                xj,yj = line.jumps()
                 first = line[0]
                 second = line[-1] # Strictly could fail in *very* highly pathological case
                 angle = n.arctan2(second[1]-first[1],second[0]-first[0])
+                if xj:
+                    angle = n.arctan2(n.sin(angle),-1*n.cos(angle))
+                if yj:
+                    angle = n.arctan2(-1*n.sin(angle),n.cos(angle))
                 angles[i] = angle
             order = n.argsort(angles)
             newlines = []
@@ -201,6 +206,8 @@ class NeumannDomain(object):
         for line in self.lines:
             points.append(line.points)
         return n.vstack(points)
+    def as_sanitised_curves(self):
+        pass
     def as_closed_curves(self):
         '''Joins the component lines and returns a list of 2d arrays
         describing sections of the domain cut by any boundary it
@@ -273,6 +280,20 @@ class NeumannLine(object):
         '''
         inv = NeumannLine(self.end,self.start,self.end_type,self.start_type,self.points[::-1])
         return inv
+    def jumps(self):
+        '''
+        Returns a tuple (x,y), each True/False depending on whether the line passes through a periodic boundary.
+        '''
+        x = False
+        y = False
+        for i in range(len(self)-1):
+            cur = self[i]
+            nex = self[i+1]
+            if nex[0]-cur[0] > 5:
+                x = True
+            if nex[1]-cur[1] > 5:
+                y = True
+        return x,y
     def __str__(self):
         return '<Neumann line: {0} at {1} -> {2} at {3}>'.format(self.start_type, self.start, self.end_type, self.end)
     def __repr__(self):
@@ -331,6 +352,7 @@ class NeumannTracer(object):
         self.lines = []
         self.start_points = []
         self.end_points = []
+        self.extra_lines = []
 
         self.fill_arr()
 
@@ -497,6 +519,7 @@ class NeumannTracer(object):
                 else:
                     direction = 'up'
                 diff = [coords[0]-saddlex,coords[1]-saddley]
+                self.extra_lines.append(n.array([[saddlex,saddley],[saddlex+2*diff[0],saddley+2*diff[1]]]))
                 points,endcoord = trace_gradient_line(coords[0] + 0.1*diff[0],coords[1] + 0.1*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
 
                 # Check here whether the line has gone in totally the wrong direction. Try a simple retest if so.
@@ -740,7 +763,7 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
-    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,print_patch_areas=False,figsize=None,save=False):
+    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,print_patch_areas=False,figsize=None,show_sample_directions=False,save=False):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -794,13 +817,23 @@ class NeumannTracer(object):
                 ps = domain.as_closed_curves()
                 # if len(ps)>0:
                 #     print 'ps are',ps
+                if len(ps) > 1:
+                    print 'patches are',ps
                 for p in ps:
-                    patch = Polygon(p,alpha=0.7,
-                                    closed=True,
-                                    color=colour,
-                                    linestyle=n.random.choice(patch_linestyles),
-                                    linewidth=2,
-                                    )
+                    if len(ps) > 1:
+                        patch = Polygon(p,alpha=0.7,
+                                        closed=True,
+                                        color=(0.1,0.1,0.1),
+                                        linestyle=n.random.choice(patch_linestyles),
+                                        linewidth=3,
+                                        )
+                    else:
+                        patch = Polygon(p,alpha=0.7,
+                                        closed=True,
+                                        color=colour,
+                                        linestyle=n.random.choice(patch_linestyles),
+                                        linewidth=2,
+                                        )
                     ax.add_patch(patch)
                 if print_patch_areas:
                     area = domain.area()
@@ -835,6 +868,12 @@ class NeumannTracer(object):
                 for seg in segs: #filter(lambda j: len(j)==1, segs):
                     ax.plot(seg[:,0],seg[:,1],'-',color='purple')
                 #ax.plot(line[:,0],line[:,1],'-',color='purple')
+
+        if show_sample_directions:
+            for line in self.extra_lines:
+                if n.abs(line[0,0]-line[1,0] < 5) and n.abs(line[0,1] - line[1,1] < 5):
+                    ax.plot(line[:,0],line[:,1],'-',color='red')
+                                        
 
         if plot_hessian:
             hessian_arr = n.rot90(self.hessian_arr[::-1],3)
@@ -1013,8 +1052,8 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
                         return (points,coords)
 
 def grad(func,x,y,dx,dy):
-    dfdx = (func(x,y)-func(x+0.05*dx,y))/(0.05*dx)
-    dfdy = (func(x,y)-func(x,y+0.05*dy))/(0.05*dy)
+    dfdx = (func(x,y)-func(x+0.015*dx,y))/(0.015*dx)
+    dfdy = (func(x,y)-func(x,y+0.015*dy))/(0.015*dy)
     return n.array([dfdx,dfdy])
 
 def hessian(func,x,y,dx,dy):
