@@ -24,7 +24,6 @@ class UpsampleRegion(object):
         if (sx < x < (sx + lx)) and (sy < y < (sy+ly)):
             return True
         return False
-    
 
 class CriticalGraph(dict):
     '''A dict subclass representing the graph of Neumann nodes (critical
@@ -67,7 +66,8 @@ class CriticalGraph(dict):
                 line = lines[i]
                 xj,yj = line.jumps()
                 first = line[0]
-                second = line[-1] # Strictly could fail in *very* highly pathological case
+                second = line[-1]  # Strictly could fail in *very*
+                                   # highly pathological case
                 angle = n.arctan2(second[1]-first[1],second[0]-first[0])
                 if xj:
                     angle = n.arctan2(n.sin(angle),-1*n.cos(angle))
@@ -117,7 +117,8 @@ class CriticalGraph(dict):
         areas = []
         i = 0
         for domain in domains:
-            lineprint('\rGetting area of domain %d / %d' % (i,len(domains)),False)
+            lineprint('\rGetting area of domain %d / %d' % (i,len(domains)),
+                      False)
             i += 1
             area = domain.area()
             areas.append(area)
@@ -199,8 +200,9 @@ class NeumannDomain(object):
         self.minnum = minima
         self.sadnum = saddles
     def as_closed_curve(self):
-        '''
-        Joins the component lines and returns a single 2d array of points making up the domain boundary.
+        '''Joins the component lines and returns a single 2d array of points
+        making up the domain boundary.
+
         '''
         points = []
         for line in self.lines:
@@ -238,8 +240,7 @@ class NeumannDomain(object):
 the cell crosses a boundary
 
         '''
-        pass
-
+        return sanitise_domain(self.as_closed_curve())
     def number_of_sides(self):
         '''Returns the number of domain walls.'''
         return len(self.lines)
@@ -249,11 +250,14 @@ the cell crosses a boundary
             vertex_set.add(line.end)
         return vertex_set
     def area(self):
-        return area_from_border(self.as_closed_curve())
+        return area_from_border(self.as_sanitised_curve())
     def crude_area(self):
         return crude_area_from_border([line.points for line in self.lines])
     def __str__(self):
-        return '<Neumann domain with {0} saddles, {1} maxima, {2} minima>'.format(self.sadnum,self.maxnum,self.minnum)
+        return ('<Neumann domain with {0} saddles,'
+                '{1} maxima, {2} minima>').format(self.sadnum,
+                                                  self.maxnum,
+                                                  self.minnum)
     def __repr__(self):
         return self.__str__()
 
@@ -275,14 +279,18 @@ class NeumannLine(object):
         self.end_type = end_type
         self.points = points
     def inverse(self):
+        '''Returns the equivalent line going in the opposite direction and
+        with start/end reversed.
+
         '''
-        Returns the equivalent line going in the opposite direction and with start/end reversed.
-        '''
-        inv = NeumannLine(self.end,self.start,self.end_type,self.start_type,self.points[::-1])
+        inv = NeumannLine(self.end, self.start,
+                          self.end_type, self.start_type,
+                          self.points[::-1])
         return inv
     def jumps(self):
-        '''
-        Returns a tuple (x,y), each True/False depending on whether the line passes through a periodic boundary.
+        '''Returns a tuple (x,y), each True/False depending on whether the
+        line passes through a periodic boundary.
+
         '''
         x = False
         y = False
@@ -295,7 +303,8 @@ class NeumannLine(object):
                 y = True
         return x,y
     def __str__(self):
-        return '<Neumann line: {0} at {1} -> {2} at {3}>'.format(self.start_type, self.start, self.end_type, self.end)
+        return '<Neumann line: {0} at {1} -> {2} at {3}>'.format(
+            self.start_type, self.start, self.end_type, self.end)
     def __repr__(self):
         return self.__str__()
     def __getitem__(self,*args):
@@ -306,8 +315,8 @@ class NeumannLine(object):
         return len(self.points)
 
 class NeumannTracer(object):
-    '''
-    Stores information about a function and appropriate x/y information to store information about it in an array.
+    '''Stores information about a function and appropriate x/y
+    information to store information about it in an array.
 
     Args:
     - xnum: Number of x pixels to sample
@@ -318,9 +327,12 @@ class NeumannTracer(object):
     - start_point: The (x,y) tuple to take as (0,0) in the function.
     - to_edges: May be False (ignore edges),
                 'periodic' (use periodic boundary conditions) or
-                'fourier' (periodic with a -1 factor if passing through the boundary).
+                'fourier' (periodic with a -1 factor if passing
+                           through the boundary).
+
     '''
-    def __init__(self,xnum,ynum,dx,dy,func,start_point=(0.0,0.0),to_edges=False,upsample_at=1000000):
+    def __init__(self, xnum, ynum, dx, dy, func,
+                 start_point=(0.0, 0.0), to_edges=False, upsample_at=1000000):
         self.arr = n.zeros((xnum,ynum),dtype=n.float64)
         self.hessian_arr = n.zeros((xnum,ynum),dtype=n.float64)
         self.xnum = xnum
@@ -359,8 +371,9 @@ class NeumannTracer(object):
         self.figax = (None,None)
 
     def func_at_coord(self,x,y):
-        '''
-        Return the value of self.func at abstract coordinates x,y translated via dx and the correct start point.
+        '''Return the value of self.func at abstract coordinates x,y
+        translated via dx and the correct start point.
+
         '''
         sx,sy = self.start_point
         dx,dy = self.dr
@@ -394,9 +407,10 @@ class NeumannTracer(object):
         if not self.arr_filled:
             self.fill_arr()
         print 'Finding critical points...'
-        maxima,minima,saddles,degenerate = get_critical_points(self.arr,self.to_edges)
+        maxima, minima, saddles, degenerate = get_critical_points(self.arr,
+                                                                  self.to_edges)
         self.crits = (maxima,minima,saddles,degenerate)
-        self.prune_critical_points()
+        #self.prune_critical_points()
         self.maxima = self.crits[0]
         self.minima = self.crits[1]
         self.saddles = self.crits[2]
@@ -414,7 +428,8 @@ class NeumannTracer(object):
         saddle - it seems that these are (almost?) always numerical
         mistakes.
 
-        This approach is a little crude, a later replacement might involve resampling.
+        This approach is a little crude, a later replacement might
+        involve resampling.
 
         '''
         print 'Pruning critical points'
@@ -428,7 +443,9 @@ class NeumannTracer(object):
         realsaddles = n.ones(len(saddles),dtype=bool)
 
         for i in range(len(saddles)):
-            lineprint('\r\tChecking saddle {0} / {1}'.format(i,len(saddles)),False)
+            lineprint('\r\tChecking saddle {0} / {1}'.format(i,
+                                                             len(saddles)),
+                      False)
             saddle = saddles[i]
             adj = all_adj_indices.copy()
             adj[:,0] += saddle[0]
@@ -481,7 +498,8 @@ class NeumannTracer(object):
 
         curs = 0
         for saddle in self.saddles:
-            lineprint('\r\tCurrent saddle {0} / {1}'.format(curs,len(self.saddles)),False)
+            lineprint('\r\tCurrent saddle {0} / {1}'.format(
+                curs,len(self.saddles)),False)
             curs += 1
 
             saddlex,saddley = saddle
@@ -507,11 +525,12 @@ class NeumannTracer(object):
             for i in range(6):
                 cur_adj = adjs[i]
                 next_adj = adjs[(i+1) % 6]
-                current_region_angles.append(n.arctan2(ais[i][1]-saddley,ais[i][0]-saddlex))
+                current_region_angles.append(n.arctan2(ais[i][1]-saddley,
+                                                       ais[i][0]-saddlex))
                 if n.sign(next_adj) != n.sign(cur_adj):
                     sign = n.sign(cur_adj)
                     tracing_start_points.append([sign,ais[i]])
-                    
+
             for coords in tracing_start_points:
                 sign,coords = coords
                 if sign == 1.0:
@@ -519,20 +538,35 @@ class NeumannTracer(object):
                 else:
                     direction = 'up'
                 diff = [coords[0]-saddlex,coords[1]-saddley]
-                self.extra_lines.append(n.array([[saddlex,saddley],[saddlex+2*diff[0],saddley+2*diff[1]]]))
-                points,endcoord = trace_gradient_line(coords[0] + 0.1*diff[0],coords[1] + 0.1*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
+                self.extra_lines.append(n.array([[saddlex,saddley],
+                                                 [saddlex+2*diff[0],
+                                                  saddley+2*diff[1]]]))
+                points,endcoord = trace_gradient_line(coords[0] + 0.1*diff[0],
+                                                      coords[1] + 0.1*diff[1],
+                                                      self.dx,self.dy,
+                                                      self.xnum,self.ynum,
+                                                      self.func,self.crits_dict,
+                                                      self.start_point,
+                                                      direction, self.to_edges)
 
-                # Check here whether the line has gone in totally the wrong direction. Try a simple retest if so.
+                # Check here whether the line has gone in totally the
+                # wrong direction. Try a simple retest if so.
                 if endcoord is not None and False:
-                    origangle = n.arctan2(coords[1]-saddley,coords[0]-saddlex)
-                    endangle = n.arctan2(endcoord[1]-saddley,endcoord[0]-saddlex)
+                    origangle = n.arctan2(coords[1]-saddley, coords[0]-saddlex)
+                    endangle = n.arctan2(endcoord[1]-saddley,
+                                         endcoord[0]-saddlex)
                     angle_diff = (endangle % (2*n.pi)) - (origangle % (2*n.pi))
                     if angle_diff > n.pi:
                         angle_diff -= n.pi
                     if angle_diff > n.pi/2:
                         print 'resampling line',origangle,endangle,'from',coords
-                        points,endcoord = trace_gradient_line(coords[0] + 0.5*diff[0],coords[1] + 0.5*diff[1],self.dx,self.dy,self.xnum,self.ynum,self.func,self.crits_dict,self.start_point,direction,self.to_edges)
-                
+                        points, endcoord = trace_gradient_line(
+                            coords[0] + 0.5*diff[0], coords[1] + 0.5*diff[1],
+                            self.dx, self.dy,
+                            self.xnum, self.ynum, self.func,
+                            self.crits_dict, self.start_point,
+                            direction, self.to_edges)
+
                 if len(points) > 4:
                     points = points[4:]
                 else:
@@ -546,8 +580,11 @@ class NeumannTracer(object):
                     self.end_points.append(None)
                 self.lines.append(n.array(points))
 
-                if endcoord is not None and tuple(endcoord) not in self.minima and tuple(endcoord) not in self.maxima:
-                    fval = self.func(self.sx + endcoord[0]*self.dx, self.sy + endcoord[1]*self.dy)
+                if (endcoord is not None and
+                    tuple(endcoord) not in self.minima and
+                    tuple(endcoord) not in self.maxima):
+                    fval = self.func(self.sx + endcoord[0]*self.dx,
+                                     self.sy + endcoord[1]*self.dy)
                     if fval > 0:
                         self.maxima.append(tuple(endcoord))
                     else:
@@ -565,19 +602,27 @@ class NeumannTracer(object):
             self.fill_arr()
         if not self.found_crits:
             self.find_critical_points()
-        
+
         print 'maxima'
         for entry in self.maxima:
-            print entry,self.func(self.sx+entry[0]*self.dx,self.sy+entry[1]*self.dy),self.arr[entry[0],entry[1]]
+            print (entry, self.func(self.sx+entry[0]*self.dx,
+                                    self.sy+entry[1]*self.dy),
+                   self.arr[entry[0], entry[1]])
         print 'minima'
         for entry in self.minima:
-            print entry,self.func(self.sx+entry[0]*self.dx,self.sy+entry[1]*self.dy),self.arr[entry[0],entry[1]]
+            print (entry, self.func(self.sx+entry[0]*self.dx,
+                                    self.sy+entry[1]*self.dy),
+                   self.arr[entry[0], entry[1]])
         print 'saddles'
         for entry in self.saddles:
-            print entry,self.func(self.sx+entry[0]*self.dx,self.sy+entry[1]*self.dy),self.arr[entry[0],entry[1]]
+            print (entry, self.func(self.sx+entry[0]*self.dx,
+                                    self.sy+entry[1]*self.dy),
+                   self.arr[entry[0], entry[1]])
         print 'degenerate'
         for entry in self.degenerate:
-            print entry,self.func(self.sx+entry[0]*self.dx,self.sy+entry[1]*self.dy),self.arr[entry[0],entry[1]]
+            print (entry, self.func(self.sx+entry[0]*self.dx,
+                                    self.sy+entry[1]*self.dy),
+                   self.arr[entry[0], entry[1]]
 
     def make_hessian_array(self):
         '''
@@ -592,7 +637,7 @@ class NeumannTracer(object):
             lineprint('\r\tx = {0} / {1}'.format(x,xnum),False)
             for y in range(ynum):
                 arr[x,y] = hessian_det(self.func, sx + x*dx, sy + y*dy, dx, dy)
-        
+
         self.hessian_filled = True
         lineprint()
 
@@ -737,19 +782,22 @@ class NeumannTracer(object):
         frac7 = float(max7 + min7) / totdegrees
         frac8 = float(max8 + min8) / totdegrees
 
-        return n.array(zip(range(2,9),(frac2, frac3, frac4, frac5, frac6, frac7, frac8)))
-    
+        return n.array(zip(range(2,9),
+                           (frac2, frac3, frac4, frac5, frac6, frac7, frac8)))
+
     def get_domain_areas(self):
         if not self.graph_built:
             self.build_graph()
         return self.graph.get_domain_areas()
-        
+
     def build_everything(self,including_hessian=False):
         '''
-        Build all the arrays and trace all the lines via the various methods of self.
+        Build all the arrays and trace all the lines via the various
+        methods of self.
 
         Args:
-        - including_hessian: Default False, whether to bother doing the Hessian array (this can be quite slow to make)
+        - including_hessian: Default False, whether to bother doing the
+          Hessian array (this can be quite slow to make)
         '''
         if not self.arr_filled:
             self.fill_arr()
@@ -763,7 +811,13 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
-    def plot(self,trace_lines=True,plot_hessian=False,show_saddle_directions=False,show_domain_patches=False,print_patch_areas=False,figsize=None,show_sample_directions=False,save=False):
+    def plot(self, trace_lines=True, plot_hessian=False,
+             show_saddle_directions=False,
+             show_domain_patches=False,
+             print_patch_areas=False,
+             figsize=None,
+             show_sample_directions=False,
+             save=False):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -788,7 +842,7 @@ class NeumannTracer(object):
             self.get_recognised_domains()
 
         plotarr = n.rot90(self.arr[::-1],3)
-        
+
         #fig,ax = plot_arr_with_crits(plotarr,self.crits)
         maxima,minima,saddles,degenerate = self.crits
         maxima = n.array(maxima)
@@ -806,7 +860,6 @@ class NeumannTracer(object):
         ax.set_xlim(0,plotarr.shape[0])
         ax.set_ylim(0,plotarr.shape[1])
 
- 
         ax.set_xticks([])
         ax.set_yticks([])
 
@@ -821,17 +874,19 @@ class NeumannTracer(object):
                     print 'patches are',ps
                 for p in ps:
                     if len(ps) > 1:
-                        patch = Polygon(p,alpha=0.7,
+                        patch = Polygon(p,alpha=1.0,
                                         closed=True,
                                         color=(0.1,0.1,0.1),
-                                        linestyle=n.random.choice(patch_linestyles),
-                                        linewidth=3,
+                                        linestyle=n.random.choice(
+                                            patch_linestyles),
+                                        linewidth=2,
                                         )
                     else:
                         patch = Polygon(p,alpha=0.7,
                                         closed=True,
                                         color=colour,
-                                        linestyle=n.random.choice(patch_linestyles),
+                                        linestyle=n.random.choice(
+                                            patch_linestyles),
                                         linewidth=2,
                                         )
                     ax.add_patch(patch)
@@ -839,7 +894,6 @@ class NeumannTracer(object):
                     area = domain.area()
                     pos = n.average(p,axis=0)
                     ax.text(pos[0],pos[1],'{:.1f}'.format(area))
-                    
 
         legend_entries = []
         if len(maxima) > 0:
@@ -871,15 +925,17 @@ class NeumannTracer(object):
 
         if show_sample_directions:
             for line in self.extra_lines:
-                if n.abs(line[0,0]-line[1,0] < 5) and n.abs(line[0,1] - line[1,1] < 5):
+                if (n.abs(line[0,0]-line[1,0] < 5) and
+                    n.abs(line[0,1] - line[1,1] < 5)):
                     ax.plot(line[:,0],line[:,1],'-',color='red')
-                                        
 
         if plot_hessian:
             hessian_arr = n.rot90(self.hessian_arr[::-1],3)
-            ax.imshow(n.sign(hessian_arr),cmap='binary',interpolation='none',alpha=0.5)
-            ax.contour(hessian_arr,levels=[0],linewidths=2,alpha=0.6,color='cyan')
-        
+            ax.imshow(n.sign(hessian_arr), cmap='binary',
+                      interpolation='none', alpha=0.5)
+            ax.contour(hessian_arr, levels=[0],
+                       linewidths=2, alpha=0.6, color='cyan')
+
         self.figax = (fig,ax)
 
 
@@ -926,7 +982,7 @@ class NeumannTracer(object):
 
         plotarr = n.rot90(self.arr[::-1],3)
         plotarr = self.arr
-        
+
         #fig,ax = plot_arr_with_crits(plotarr,self.crits)
         maxima,minima,saddles,degenerate = self.crits
         maxima = n.array(maxima)
@@ -963,17 +1019,24 @@ class NeumannTracer(object):
         minimumzs = n.array(minimumzs)
 
         extlen = self.arr.shape[0]
-        saddleextent = [-extlen/2.0,extlen/2.0,-extlen/2.0,extlen/2.0,n.min(saddlezs),n.max(saddlezs)]
-        minimumextent = [-extlen/2.0,extlen/2.0,-extlen/2.0,extlen/2.0,n.min(minimumzs),n.max(minimumzs)]
-        maximumextent = [-extlen/2.0,extlen/2.0,-extlen/2.0,extlen/2.0,n.min(maximumzs),n.max(maximumzs)]
+        saddleextent = [-extlen/2.0, extlen/2.0, -extlen/2.0,
+                        extlen/2.0, n.min(saddlezs), n.max(saddlezs)]
+        minimumextent = [-extlen/2.0, extlen/2.0, -extlen/2.0,
+                         extlen/2.0, n.min(minimumzs), n.max(minimumzs)]
+        maximumextent = [-extlen/2.0, extlen/2.0, -extlen/2.0,
+                         extlen/2.0, n.min(maximumzs), n.max(maximumzs)]
 
         if len(saddles) > 0:
-            may.points3d(saddles[:,0],saddles[:,1],saddlezs,color=(1,1,0),scale_factor=1.5,extent=saddleextent)
+            may.points3d(saddles[:, 0], saddles[:, 1], saddlezs,
+                         color=(1, 1, 0), scale_factor=1.5, extent=saddleextent)
         if len(minima) > 0:
-            may.points3d(minima[:,0],minima[:,1],minimumzs,color=(1,0,0),scale_factor=1.5,extent=minimumextent)
+            may.points3d(minima[:, 0], minima[:, 1], minimumzs,
+                         color=(1, 0, 0), scale_factor=1.5,
+                         extent=minimumextent)
         if len(saddles) > 0:
-            may.points3d(maxima[:,0],maxima[:,1],maximumzs,color=(0,0,1),scale_factor=1.5,extent=maximumextent)
-            
+            may.points3d(maxima[:, 0], maxima[:, 1], maximumzs,
+                         color=(0, 0, 1), scale_factor=1.5,
+                         extent=maximumextent)
 
 def get_filled_array(xnum,ynum,dx,dy,func,start_point=(0.0,0.0)):
     arr = n.zeros((xnum,ynum),dtype=n.float64)
@@ -983,7 +1046,8 @@ def get_filled_array(xnum,ynum,dx,dy,func,start_point=(0.0,0.0)):
             arr[x,y] = func(sx + x*dx, sy + y*dy)
     return arr
 
-def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,direction,to_edges):
+def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
+                        critdict, start_point, direction, to_edges):
     #print 'Tracing gradient line'
     cx,cy = sx,sy
     startx,starty = start_point
@@ -1019,16 +1083,18 @@ def trace_gradient_line(sx,sy,dx,dy,xnum,ynum,func,critdict,start_point,directio
         #         cx -= 0.5*n.cos(angle)
         #         cy -= 0.5*n.sin(angle)
         points.append([cx,cy])
-        
+
         if cx < 0 or cx > xnum or cy < 0 or cy > ynum:
-            if to_edges in ['periodic','fourier']: # Need extra condition with fourier to get the signs right
+            if to_edges in ['periodic','fourier']:
+                   # Need extra condition with fourier to get the signs right
                 cx %= xnum
                 cy %= ynum
-            else:    
+            else:
                 return (points,None)
 
         nearx,neary = int(n.round(cx)),int(n.round(cy))
-        if to_edges in ['periodic','fourier']: # Need extra condition with fourier to get the signs right
+        if to_edges in ['periodic','fourier']:
+                   # Need extra condition with fourier to get the signs right
             nearx %= xnum
             neary %= ynum
         if (nearx,neary) in critdict:
@@ -1073,7 +1139,7 @@ def hessian_det(func,x,y,dx,dy):
 def hessian_sign(func,x,y,dx,dy):
     hess_mat = hessian(func,x,y,dx,dy)
     return n.sign(n.linalg.det(hess_mat))
-    
+
 def critical_points_to_index_dict(crits):
     maxima,minima,saddles,degenerate = crits
     d = {}
@@ -1089,9 +1155,11 @@ def critical_points_to_index_dict(crits):
 
 even_adj_indices = n.array([[-1,-1],[-1,0],[0,1],[1,0],[1,-1],[0,-1]])
 odd_adj_indices =  n.array([[-1,0],[-1,1],[0,1],[1,1],[1,0],[0,-1]])
-all_adj_indices = n.array([[-1,-1],[-1,0],[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1]])
+all_adj_indices = n.array([[-1, -1], [-1, 0], [-1, 1], [0, 1],
+                           [1, 1], [1, 0], [1, -1], [0, -1]])
 safe_adj_indices = n.array([[-1,0],[0,1],[1,0],[0,-1]])
-#even_adj_indices = n.array([[-1,-1],[-1,0],[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1]])
+#even_adj_indices = n.array([[-1, -1], [-1, 0], [-1, 1],
+#                   [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]])
 #odd_adj_indices = even_adj_indices
 def get_critical_points(arr,to_edges=False):
     lx,ly = arr.shape
@@ -1152,7 +1220,8 @@ def get_critical_points(arr,to_edges=False):
     lineprint()
 
     return (maxima,minima,saddles,degenerate)
-    #return (n.array(maxima),n.array(minima),n.array(saddles),n.array(degenerate))
+    #return (n.array(maxima),n.array(minima),
+#                   n.array(saddles),n.array(degenerate))
 
 def classify_point(ds):
     if n.all(ds > 0):
@@ -1203,7 +1272,6 @@ def plot_arr_with_crits(arr,crits):
         legend_entries.append('degenerate')
 
     return fig,ax
-        
 
 def sanitise_line(l):
     curcut = 0
@@ -1221,7 +1289,6 @@ def sanitise_line(l):
     if curcut < len(l):
         segs.append(l[curcut:])
     return segs
-        
 
 def random_wave_function(number=50, wvmag=5, seed=0,returnall=False):
     if seed == 0:
@@ -1244,9 +1311,6 @@ def random_wave_function(number=50, wvmag=5, seed=0,returnall=False):
         interior = wvs.dot(xyarr) + phases
         exterior = amps*n.sin(interior)
         return n.sum(exterior)
-        # for i in range(number):
-        #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
-        # return res
     if returnall:
         return (func,(amps,wvs,phases))
     return func
@@ -1282,7 +1346,8 @@ def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
     phases = 2*n.pi*generator.rand(number)
     wvs = n.zeros((number,2), dtype=n.float64)
     for i in range(number):
-        wv = n.array(possible_wvs[generator.randint(len(possible_wvs))], dtype=n.float64)
+        wv = n.array(possible_wvs[generator.randint(len(possible_wvs))],
+                     dtype=n.float64)
         generator.shuffle(wv)
         wv *= possible_signs[generator.randint(len(possible_signs))]
         wv *= 2*n.pi/n.sqrt(scale/2.)
@@ -1294,9 +1359,6 @@ def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
         interior = wvs.dot(xyarr) + phases
         exterior = amps*n.sin(interior)
         return n.sum(exterior)
-        # for i in range(number):
-        #     res += amps[i] * n.sin(2*n.pi/wvmag * wvs[i].dot(n.array([x,y])) + phases[i])
-        # return res
     if returnall:
         return func, (amps, wvs, phases)
     return func
@@ -1357,7 +1419,6 @@ def get_saddle_directions(vals):
         print vals
         print changes
     return returns
-            
 
 def angle_index(line,lines):
     endseg = line[-2:][::-1]
@@ -1376,8 +1437,28 @@ def area_from_border(lines):
     area = 0.0
     num = len(lines)
     for i in range(len(lines)):
-        area += lines[i,0]*lines[(i+1) % num,1] - lines[i,1]*lines[(i+1) % num, 0]
+        area += (lines[i,0]*lines[(i+1) % num,1] -
+                 lines[i,1]*lines[(i+1) % num, 0])
     return n.abs(area/2.)
+
+def sanitise_domain(ps,shape=None):
+    '''Takes a domain that may pass through a boundary, and sanitises
+    it to have the right shape.'''
+    if shape is None:
+        dx,dy = None,None
+    else:
+        dx,dy = shape
+
+    for i in range(len(ps)):
+        cur = ps[i]
+        nex = ps[(i+1) % len(ps)]
+        if n.abs(nex[0]-cur[0]) > 5:
+            diff = n.round(nex[0] - cur[0])
+            ps[i+1:,0] -= diff
+        if n.abs(nex[1]-cur[1]) > 5:
+            diff = n.round(nex[1] - cur[1])
+            ps[i+1:,0] -= diff
+    return ps
 
 def crude_area_from_border(lines,numsteps=100):
     maxxs = map(lambda j: n.max(j[:,0]),lines)
@@ -1402,7 +1483,7 @@ def crude_area_from_border(lines,numsteps=100):
         #print 'testline',testline
         p = testline[0]
         r = testline[1] - testline[0]
-        intersections = [] 
+        intersections = []
         for i in range(len(fullpath)):
             q = fullpath[i]
             s = fullpath[(i+1) % len(fullpath)] - q
@@ -1419,14 +1500,13 @@ def crude_area_from_border(lines,numsteps=100):
             area += dx*(top-bottom)
         elif len(intersections) == 4:
             intersections = n.sort(intersections)
-            area += dx*(intersections[1]-intersections[0] + intersections[3]-intersections[2])
+            area += dx*(intersections[1]-intersections[0] +
+                        intersections[3]-intersections[2])
         #print len(intersections),'intersections found',intersections
     return area
-        
-            
-    
+
     return (minx,maxx,miny,maxy)
-    
+
 def img_interpolate(x,y,arr):
     roundx = int(n.floor(x))
     roundy = int(n.floor(y))
@@ -1515,4 +1595,3 @@ def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
     if returnall:
         return tracer, f, d2
     return tracer
-
