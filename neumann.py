@@ -35,9 +35,17 @@ class CriticalGraph(dict):
     dict setting.
 
     '''
-    def __init__(self,*args):
+    def __init__(self, xnum=0, ynum=0, *args):
+        '''Arguments xnum and ynum should be the array size in each direction,
+        and are used when calculating angles between critical
+        points.
+
+        '''
         super(CriticalGraph, self).__init__(*args)
+        self.xnum = xnum
+        self.ynum = ynum
         self.nodes_aligned = False
+
     def add_or_edit_node(self, node_coords, node_type, new_line):
         '''
         Add the line new_line to the node with coords node_coords. If this
@@ -49,6 +57,7 @@ class CriticalGraph(dict):
         if not self.has_key(node_coords):
             self[node_coords] = [node_type, []]
         self[node_coords][1].append(new_line)
+
     def align_nodes(self):
         '''Goes through every node of the graph and rearranges the lines so
         that they are listed in increasing order of approach angle about the
@@ -66,18 +75,27 @@ class CriticalGraph(dict):
                 first = line[0]
                 second = line[-1]  # Strictly could fail in *very*
                                    # highly pathological case
-                angle = n.arctan2(second[1]-first[1], second[0]-first[0])
+                distance = second - first
                 if xj:
-                    angle = n.arctan2(n.sin(angle), -1*n.cos(angle))
+                    if distance[0] > 0:
+                        distance[0] -= self.xnum
+                    else:
+                        distance[0] += self.xnum
                 if yj:
-                    angle = n.arctan2(-1*n.sin(angle), n.cos(angle))
+                    if distance[1] > 0:
+                        distance[1] -= self.ynum
+                    else:
+                        distance[1] += self.ynum
+                angle = n.arctan2(distance[1], distance[0])
                 angles[i] = angle
+            print angles
             order = n.argsort(angles)
             newlines = []
             for i in range(len(order)):
                 newlines.append(lines[order[i]])
             self[key][1] = newlines
         self.nodes_aligned = True
+
     def get_closed_domains(self):
         '''
         Returns a list of all closed domains, recognised by walking
@@ -110,6 +128,7 @@ class CriticalGraph(dict):
                 domain_keys.append(vertices)
                 unique_domains.append(domain)
         return unique_domains
+
     def get_domain_areas(self):
         domains = self.get_closed_domains()
         areas = []
@@ -122,6 +141,7 @@ class CriticalGraph(dict):
             areas.append(area)
         print # Lineprint newline
         return areas
+
     def get_domain_from(self, line, dir='clockwise'):
         '''
         Returns the closed domain (or None if the algorithm fails)
@@ -158,6 +178,7 @@ class CriticalGraph(dict):
             start = curline.start
             end = curline.end
         return NeumannDomain(lines)
+
     def get_crit_degree_dists(self):
         '''Returns the dimension (number of lines going in/out) of each
         critical point in self. Order is maxima, minima, saddles.
@@ -197,6 +218,7 @@ class NeumannDomain(object):
         self.maxnum = maxima
         self.minnum = minima
         self.sadnum = saddles
+
     def as_closed_curve(self):
         '''Joins the component lines and returns a single 2d array of points
         making up the domain boundary.
@@ -206,8 +228,10 @@ class NeumannDomain(object):
         for line in self.lines:
             points.append(line.points)
         return n.vstack(points)
+
     def as_sanitised_curves(self):
         pass
+
     def as_closed_curves(self):
         '''Joins the component lines and returns a list of 2d arrays
         describing sections of the domain cut by any boundary it
@@ -233,29 +257,36 @@ class NeumannDomain(object):
             lastseg = segs.pop(-1)
             segs[0] = n.vstack((lastseg, segs[0]))
         return segs
+
     def as_sanitised_curve(self):
         '''Joins the component lines and shifts by the width of the torus if
 the cell crosses a boundary
 
         '''
         return sanitise_domain(self.as_closed_curve())
+
     def number_of_sides(self):
         '''Returns the number of domain walls.'''
         return len(self.lines)
+
     def vertices(self):
         vertex_set = set()
         for line in self.lines:
             vertex_set.add(line.end)
         return vertex_set
+
     def area(self):
         return area_from_border(self.as_sanitised_curve())
+
     def crude_area(self):
         return crude_area_from_border([line.points for line in self.lines])
+
     def __str__(self):
         return ('<Neumann domain with {0} saddles,'
                 '{1} maxima, {2} minima>').format(self.sadnum,
                                                   self.maxnum,
                                                   self.minnum)
+
     def __repr__(self):
         return self.__str__()
 
@@ -276,6 +307,7 @@ class NeumannLine(object):
         self.start_type = start_type
         self.end_type = end_type
         self.points = points
+
     def inverse(self):
         '''Returns the equivalent line going in the opposite direction and
         with start/end reversed.
@@ -285,6 +317,7 @@ class NeumannLine(object):
                           self.end_type, self.start_type,
                           self.points[::-1])
         return inv
+
     def jumps(self):
         '''Returns a tuple (x, y), each True/False depending on whether the
         line passes through a periodic boundary.
@@ -295,20 +328,25 @@ class NeumannLine(object):
         for i in range(len(self)-1):
             cur = self[i]
             nex = self[i+1]
-            if nex[0]-cur[0] > 5:
+            if n.abs(nex[0]-cur[0]) > 5:
                 x = True
-            if nex[1]-cur[1] > 5:
+            if n.abs(nex[1]-cur[1]) > 5:
                 y = True
         return x, y
+
     def __str__(self):
         return '<Neumann line: {0} at {1} -> {2} at {3}>'.format(
             self.start_type, self.start, self.end_type, self.end)
+
     def __repr__(self):
         return self.__str__()
+
     def __getitem__(self,*args):
         return self.points.__getitem__(*args)
+
     def __setitem__(self,*args):
         return self.points.__setitem__(*args)
+
     def __len__(self,*args):
         return len(self.points)
 
@@ -354,7 +392,7 @@ class NeumannTracer(object):
         self.graph_built = False
         self.found_domains = False
 
-        self.graph = CriticalGraph()
+        self.graph = CriticalGraph(xnum, ynum)
         self.domains = []
 
         self.upsample_regions = []
@@ -478,6 +516,7 @@ class NeumannTracer(object):
         saddles = n.array(saddles)[realsaddles]
         saddles = [tuple(c) for c in saddles]
         self.crits = maxima, minima, saddles, degenerate
+
     def trace_neumann_lines(self):
         '''For every saddle in self.crits, drop 4 Neumann lines at the points
         of adjacent sign change, each gradient ascending/descending
@@ -865,32 +904,28 @@ class NeumannTracer(object):
             for domain in self.domains:
                 colour = hsv_to_rgb(n.random.random(), 1., 1.)
                 ps = domain.as_closed_curves()
-                if len(ps) > 1:
+                for p in ps:
                     if len(ps) > 1:
-                        print 'patches are', ps
-                    for p in ps:
-                        if len(ps) > 1:
-                            patch = Polygon(p, alpha=1.0,
-                                            closed=True,
-                                            color=(0.1, 0.1, 0.1),
-                                            linestyle=n.random.choice(
-                                                patch_linestyles),
-                                            linewidth=2,
-                                            )
-                        else:
-                            patch = Polygon(p, alpha=0.7,
-                                            closed=True,
-                                            color=colour,
-                                            linestyle=n.random.choice(
-                                                patch_linestyles),
-                                            linewidth=2,
-                                            )
-                        ax.add_patch(patch)
-                    if print_patch_areas:
-                        area = domain.area()
-                        pos = n.average(p, axis=0)
-                        ax.text(pos[0], pos[1],'{:.1f}'.format(area))
-                    break
+                        patch = Polygon(p, alpha=1.0,
+                                        closed=True,
+                                        color=colour,
+                                        linestyle=n.random.choice(
+                                            patch_linestyles),
+                                        linewidth=2,
+                                        )
+                    else:
+                        patch = Polygon(p, alpha=0.7,
+                                        closed=True,
+                                        color=colour,
+                                        linestyle=n.random.choice(
+                                            patch_linestyles),
+                                        linewidth=2,
+                                        )
+                    ax.add_patch(patch)
+                if print_patch_areas:
+                    area = domain.area()
+                    pos = n.average(p, axis=0)
+                    ax.text(pos[0], pos[1],'{:.1f}'.format(area))
 
         legend_entries = []
         if len(maxima) > 0:
@@ -1364,6 +1399,7 @@ def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
 
 def mag(v):
     return n.sqrt(v.dot(v))
+    
 
 import sys
 def lineprint(s='', newline=True):
@@ -1416,6 +1452,7 @@ def get_saddle_directions(vals):
         print vals
         print changes
     return returns
+    
 
 def angle_index(line, lines):
     endseg = line[-2:][::-1]
@@ -1430,6 +1467,7 @@ def angle_index(line, lines):
     else:
         return 0
 
+
 def area_from_border(lines):
     area = 0.0
     num = len(lines)
@@ -1437,6 +1475,7 @@ def area_from_border(lines):
         area += (lines[i, 0]*lines[(i+1) % num, 1] -
                  lines[i, 1]*lines[(i+1) % num, 0])
     return n.abs(area/2.)
+
 
 def sanitise_domain(ps, shape=None):
     '''Takes a domain that may pass through a boundary, and sanitises
@@ -1456,6 +1495,7 @@ def sanitise_domain(ps, shape=None):
             diff = n.round(nex[1] - cur[1])
             ps[i+1:, 0] -= diff
     return ps
+
 
 def crude_area_from_border(lines, numsteps=100):
     maxxs = map(lambda j: n.max(j[:, 0]), lines)
@@ -1504,6 +1544,7 @@ def crude_area_from_border(lines, numsteps=100):
 
     return (minx, maxx, miny, maxy)
 
+
 def img_interpolate(x, y, arr):
     roundx = int(n.floor(x))
     roundy = int(n.floor(y))
@@ -1514,6 +1555,7 @@ def img_interpolate(x, y, arr):
             arr[roundx+1, roundy]*dx*(1-dy) +
             arr[roundx, roundy+1]*(1-dx)*dy +
             arr[roundx+1, roundy+1]*dx*dy)
+
 
 def doVectorsCross(p, r, q, s):
     """
@@ -1537,6 +1579,7 @@ def doVectorsCross(p, r, q, s):
         return (False, t, u)
     return (False, t, -1.0)
 
+
 def animate(filen='test', path='onephase', number=200):
     f, d2 = random_wave_function(50, 10, returnall=True)
 
@@ -1550,6 +1593,7 @@ def animate(filen='test', path='onephase', number=200):
             phases[:val] += 2*n.pi/number
         else:
             phases[0] += 2*n.pi/number
+
         def func(x, y):
             res = 0.0
             xyarr = n.array([x, y], dtype=n.float64)
@@ -1558,7 +1602,8 @@ def animate(filen='test', path='onephase', number=200):
             return n.sum(exterior)
         a = NeumannTracer(300, 300, n.pi/190, n.pi/190, f)
         a.plot(save='{0}_{1:04}.png'.format(filen, i))
-        del a # For some reason, the reference count builds up?
+        del a  # For some reason, the reference count builds up?
+
 
 def periodic_animate(scale=5, number=50, frames=200, downscale=2):
     length = int(100/float(downscale) * float(scale)/5.)
@@ -1569,6 +1614,7 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2):
 
     for i in range(frames):
         phases[0] += 2*n.pi/frames
+
         def func(x, y):
             res = 0.0
             xyarr = n.array([x, y], dtype=n.float64)
