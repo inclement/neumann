@@ -46,10 +46,8 @@ class CriticalGraph(dict):
         node_type is the critical point type, i.e. maximum, minimum or saddle.
         '''
         assert isinstance(new_line, NeumannLine), "Didn't receive NeumannLine!"
-        # if not self.nodes_aligned:
-        #     self.align_nodes()
         if not self.has_key(node_coords):
-            self[node_coords] = [node_type,[]]
+            self[node_coords] = [node_type, []]
         self[node_coords][1].append(new_line)
     def align_nodes(self):
         '''Goes through every node of the graph and rearranges the lines so
@@ -57,7 +55,7 @@ class CriticalGraph(dict):
         node.
 
         This is called automatically (and is essential) before tracing
-        nodal domains.
+        neumann domains.
         '''
         for key in self:
             lines = self[key][1]
@@ -70,7 +68,7 @@ class CriticalGraph(dict):
                                    # highly pathological case
                 angle = n.arctan2(second[1]-first[1], second[0]-first[0])
                 if xj:
-                    angle = n.arctan2(n.sin(angle),-1*n.cos(angle))
+                    angle = n.arctan2(n.sin(angle), -1*n.cos(angle))
                 if yj:
                     angle = n.arctan2(-1*n.sin(angle), n.cos(angle))
                 angles[i] = angle
@@ -187,7 +185,7 @@ class NeumannDomain(object):
     '''
     def __init__(self, lines):
         self.lines = lines
-        maxima, minima, saddles = 0,0,0
+        maxima, minima, saddles = 0, 0, 0
         for line in lines:
             start = line.start_type
             if start == 'maximum':
@@ -324,7 +322,7 @@ class NeumannTracer(object):
     - dx: Step length dx for each pixel
     - dy: Step length dy for each pixel
     - func: A function to look for critical points in
-    - start_point: The (x, y) tuple to take as (0,0) in the function.
+    - start_point: The (x, y) tuple to take as (0, 0) in the function.
     - to_edges: May be False (ignore edges),
                 'periodic' (use periodic boundary conditions) or
                 'fourier' (periodic with a -1 factor if passing
@@ -448,10 +446,10 @@ class NeumannTracer(object):
                       False)
             saddle = saddles[i]
             adj = all_adj_indices.copy()
-            adj[:,0] += saddle[0]
-            adj[:,1] += saddle[1]
-            adj[:,0] = adj[:,0] % self.xnum
-            adj[:,1] = adj[:,1] % self.ynum
+            adj[:, 0] += saddle[0]
+            adj[:, 1] += saddle[1]
+            adj[:, 0] = adj[:, 0] % self.xnum
+            adj[:, 1] = adj[:, 1] % self.ynum
             adjmax = []
             adjmin = []
             for coords in adj:
@@ -508,8 +506,8 @@ class NeumannTracer(object):
             else:
                 ais = odd_adj_indices.copy()
 
-            ais[:,0] += saddlex
-            ais[:,1] += saddley
+            ais[:, 0] += saddlex
+            ais[:, 1] += saddley
 
             val = arr[saddlex, saddley]
             adjs = n.zeros(6, dtype=n.float64)
@@ -782,7 +780,7 @@ class NeumannTracer(object):
         frac7 = float(max7 + min7) / totdegrees
         frac8 = float(max8 + min8) / totdegrees
 
-        return n.array(zip(range(2,9),
+        return n.array(zip(range(2, 9),
                            (frac2, frac3, frac4, frac5, frac6, frac7, frac8)))
 
     def get_domain_areas(self):
@@ -841,7 +839,7 @@ class NeumannTracer(object):
         if not self.found_domains and show_domain_patches:
             self.get_recognised_domains()
 
-        plotarr = n.rot90(self.arr[::-1],3)
+        plotarr = n.rot90(self.arr[::-1], 3)
 
         #fig, ax = plot_arr_with_crits(plotarr, self.crits)
         maxima, minima, saddles, degenerate = self.crits
@@ -865,7 +863,7 @@ class NeumannTracer(object):
 
         if show_domain_patches:
             for domain in self.domains:
-                colour = hsv_to_rgb(n.random.random(),1.,1.)
+                colour = hsv_to_rgb(n.random.random(), 1., 1.)
                 ps = domain.as_closed_curves()
                 if len(ps) > 1:
                     if len(ps) > 1:
@@ -874,7 +872,7 @@ class NeumannTracer(object):
                         if len(ps) > 1:
                             patch = Polygon(p, alpha=1.0,
                                             closed=True,
-                                            color=(0.1,0.1,0.1),
+                                            color=(0.1, 0.1, 0.1),
                                             linestyle=n.random.choice(
                                                 patch_linestyles),
                                             linewidth=2,
@@ -896,16 +894,16 @@ class NeumannTracer(object):
 
         legend_entries = []
         if len(maxima) > 0:
-            ax.scatter(maxima[:,0], maxima[:,1],60, c='r')
+            ax.scatter(maxima[:, 0], maxima[:, 1], 60, c='r')
             legend_entries.append('maxima')
         if len(minima) > 0:
-            ax.scatter(minima[:,0], minima[:,1],60, c='b')
+            ax.scatter(minima[:, 0], minima[:, 1], 60, c='b')
             legend_entries.append('minima')
         if len(saddles) > 0:
-            ax.scatter(saddles[:,0], saddles[:,1],60, color='yellow')
+            ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow')
             legend_entries.append('saddles')
         if len(degenerate) > 0:
-            ax.scatter(degenerate[:,0], degenerate[:,1], c='orange')
+            ax.scatter(degenerate[:, 0], degenerate[:, 1], c='orange')
             legend_entries.append('degenerate')
 
         if show_domain_patches:
@@ -919,17 +917,17 @@ class NeumannTracer(object):
                 # if len(segs) > 0:
                 #     print len(segs), map(len, segs),'segs are', segs
                 for seg in segs: #filter(lambda j: len(j)==1, segs):
-                    ax.plot(seg[:,0], seg[:,1],'-', color='purple')
-                #ax.plot(line[:,0], line[:,1],'-', color='purple')
+                    ax.plot(seg[:, 0], seg[:, 1],'-', color='purple')
+                #ax.plot(line[:, 0], line[:, 1],'-', color='purple')
 
         if show_sample_directions:
             for line in self.extra_lines:
-                if (n.abs(line[0,0]-line[1,0] < 5) and
-                    n.abs(line[0,1] - line[1,1] < 5)):
-                    ax.plot(line[:,0], line[:,1],'-', color='red')
+                if (n.abs(line[0, 0]-line[1, 0] < 5) and
+                    n.abs(line[0, 1] - line[1, 1] < 5)):
+                    ax.plot(line[:, 0], line[:, 1],'-', color='red')
 
         if plot_hessian:
-            hessian_arr = n.rot90(self.hessian_arr[::-1],3)
+            hessian_arr = n.rot90(self.hessian_arr[::-1], 3)
             ax.imshow(n.sign(hessian_arr), cmap='binary',
                       interpolation='none', alpha=0.5)
             ax.contour(hessian_arr, levels=[0],
@@ -979,7 +977,7 @@ class NeumannTracer(object):
         # if not self.found_domains and show_domain_patches:
         #     self.get_recognised_domains()
 
-        plotarr = n.rot90(self.arr[::-1],3)
+        plotarr = n.rot90(self.arr[::-1], 3)
         plotarr = self.arr
 
         #fig, ax = plot_arr_with_crits(plotarr, self.crits)
@@ -1037,7 +1035,7 @@ class NeumannTracer(object):
                          color=(0, 0, 1), scale_factor=1.5,
                          extent=maximumextent)
 
-def get_filled_array(xnum, ynum, dx, dy, func, start_point=(0.0,0.0)):
+def get_filled_array(xnum, ynum, dx, dy, func, start_point=(0.0, 0.0)):
     arr = n.zeros((xnum, ynum), dtype=n.float64)
     sx, sy = start_point
     for x in range(xnum):
@@ -1066,8 +1064,8 @@ def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
 
         if len(points)>20:
             if mag(n.array([cx, cy])-n.array(points[-20])) < 0.75:
-                #print 'new points',[int(n.round(cx)), int(n.round(cy))]
-                return (points,[int(n.round(cx)), int(n.round(cy))])
+                #print 'new points', [int(n.round(cx)), int(n.round(cy))]
+                return (points, [int(n.round(cx)), int(n.round(cy))])
 
         # if len(points) == 3:
         #     print 'extra test'
@@ -1103,7 +1101,7 @@ def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
             # if crit_type in ['maximum','minimum']:
                 #print (nearx, neary), crit_type, direction
                 points.append((nearx, neary))
-                return (points,(nearx, neary))
+                return (points, (nearx, neary))
         else:
             for indices in safe_adj_indices:
                 if (nearx + indices[0], neary + indices[1]) in critdict:
@@ -1129,7 +1127,7 @@ def hessian(func, x, y, dx, dy):
     dfdxdy = (grad(func, x+0.05*dx, y, dx, dy)[1] - dfdy) / (0.05*dx)
     dfdydx = (grad(func, x, y+0.05*dy, dx, dy)[0] - dfdx) / (0.05*dy)
 
-    return n.array([[dfdxdx, dfdxdy],[dfdydx, dfdydy]])
+    return n.array([[dfdxdx, dfdxdy], [dfdydx, dfdydy]])
 
 def hessian_det(func, x, y, dx, dy):
     hess_mat = hessian(func, x, y, dx, dy)
@@ -1152,11 +1150,11 @@ def critical_points_to_index_dict(crits):
         d[tuple(entry)] = 'degenerate'
     return d
 
-even_adj_indices = n.array([[-1,-1],[-1,0],[0,1],[1,0],[1,-1],[0,-1]])
-odd_adj_indices =  n.array([[-1,0],[-1,1],[0,1],[1,1],[1,0],[0,-1]])
+even_adj_indices = n.array([[-1, -1], [-1, 0], [0, 1], [1, 0], [1, -1], [0, -1]])
+odd_adj_indices =  n.array([[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [0, -1]])
 all_adj_indices = n.array([[-1, -1], [-1, 0], [-1, 1], [0, 1],
                            [1, 1], [1, 0], [1, -1], [0, -1]])
-safe_adj_indices = n.array([[-1,0],[0,1],[1,0],[0,-1]])
+safe_adj_indices = n.array([[-1, 0], [0, 1], [1, 0], [0, -1]])
 #even_adj_indices = n.array([[-1, -1], [-1, 0], [-1, 1],
 #                   [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]])
 #odd_adj_indices = even_adj_indices
@@ -1183,19 +1181,19 @@ def get_critical_points(arr, to_edges=False):
             else:
                 ais = odd_adj_indices.copy()
 
-            ais[:,0] += x
-            ais[:,1] += y
+            ais[:, 0] += x
+            ais[:, 1] += y
 
             if to_edges == 'periodic':
-                ais[:,0] = ais[:,0] % lx
-                ais[:,1] = ais[:,1] % ly
+                ais[:, 0] = ais[:, 0] % lx
+                ais[:, 1] = ais[:, 1] % ly
             elif to_edges == 'fourier':
-                off_x = n.logical_or(ais[:,0]<0, ais[:,0]>=lx)
-                off_y = n.logical_or(ais[:,1]<0, ais[:,1]>=ly)
+                off_x = n.logical_or(ais[:, 0]<0, ais[:, 0]>=lx)
+                off_y = n.logical_or(ais[:, 1]<0, ais[:, 1]>=ly)
                 off_edge = n.logical_or(off_x, off_y)
                 border_mult = ((-1.0*off_edge) + 0.5)*2.0
-                ais[:,0] = ais[:,0] % lx
-                ais[:,1] = ais[:,1] % ly
+                ais[:, 0] = ais[:, 0] % lx
+                ais[:, 1] = ais[:, 1] % ly
 
 
             for i in range(6):
@@ -1258,16 +1256,16 @@ def plot_arr_with_crits(arr, crits):
     legend_entries = []
 
     if len(maxima) > 0:
-        ax.scatter(maxima[:,0], maxima[:,1],60, c='r')
+        ax.scatter(maxima[:, 0], maxima[:, 1], 60, c='r')
         legend_entries.append('maxima')
     if len(minima) > 0:
-        ax.scatter(minima[:,0], minima[:,1],60, c='b')
+        ax.scatter(minima[:, 0], minima[:, 1], 60, c='b')
         legend_entries.append('minima')
     if len(saddles) > 0:
-        ax.scatter(saddles[:,0], saddles[:,1],60, color='yellow')
+        ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow')
         legend_entries.append('saddles')
     if len(degenerate) > 0:
-        ax.scatter(degenerate[:,0], degenerate[:,1], c='orange')
+        ax.scatter(degenerate[:, 0], degenerate[:, 1], c='orange')
         legend_entries.append('degenerate')
 
     return fig, ax
@@ -1297,7 +1295,7 @@ def random_wave_function(number=50, wvmag=5, seed=0, returnall=False):
 
     amps = generator.normal(size=number)
     phases = 2*n.pi*generator.rand(number)
-    wvs = n.zeros((number,2), dtype=n.float64)
+    wvs = n.zeros((number, 2), dtype=n.float64)
     for i in range(number):
         wv = generator.normal(size=2)
         wv /= mag(wv)
@@ -1311,7 +1309,7 @@ def random_wave_function(number=50, wvmag=5, seed=0, returnall=False):
         exterior = amps*n.sin(interior)
         return n.sum(exterior)
     if returnall:
-        return (func,(amps, wvs, phases))
+        return (func, (amps, wvs, phases))
     return func
 
 def duofactors(k):
@@ -1339,11 +1337,11 @@ def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
     generator.seed(seed)
 
     possible_wvs = duofactors(scale)
-    possible_signs = map(n.array,[[1,1],[1,-1],[-1,1],[-1,-1]])
+    possible_signs = map(n.array, [[1, 1], [1, -1], [-1, 1], [-1, -1]])
 
     amps = generator.normal(size=number)
     phases = 2*n.pi*generator.rand(number)
-    wvs = n.zeros((number,2), dtype=n.float64)
+    wvs = n.zeros((number, 2), dtype=n.float64)
     for i in range(number):
         wv = n.array(possible_wvs[generator.randint(len(possible_wvs))],
                      dtype=n.float64)
@@ -1410,9 +1408,9 @@ def get_saddle_directions(vals):
         else:
             returns.append((-1.0, n.argmax(region_3) + changes[2]))
         if n.sign(region_4[0]) > 0:
-            returns.append((1.0,(n.argmax(region_4) + changes[3]) % len(vals)))
+            returns.append((1.0, (n.argmax(region_4) + changes[3]) % len(vals)))
         else:
-            returns.append((-1.0,(n.argmax(region_4) + changes[3]) % len(vals)))
+            returns.append((-1.0, (n.argmax(region_4) + changes[3]) % len(vals)))
     else:
         print 'Saddle doesn\'t have 4 sign changes?'
         print vals
@@ -1421,12 +1419,12 @@ def get_saddle_directions(vals):
 
 def angle_index(line, lines):
     endseg = line[-2:][::-1]
-    angle = n.arctan2(endseg[1,1]-endseg[0,1], endseg[1,0]-endseg[0,0])
+    angle = n.arctan2(endseg[1, 1]-endseg[0, 1], endseg[1, 0]-endseg[0, 0])
     angles = n.zeros(len(lines), dtype=n.float64)
     for i in range(len(lines)):
         curline = lines[i]
         seg = curline[:2]
-        angles[i] = n.arctan2(seg[1,1]-seg[0,1], seg[1,0]-seg[0,0])
+        angles[i] = n.arctan2(seg[1, 1]-seg[0, 1], seg[1, 0]-seg[0, 0])
     if n.any(angle > angles):
         return n.argmax(angle > angles)
     else:
@@ -1436,8 +1434,8 @@ def area_from_border(lines):
     area = 0.0
     num = len(lines)
     for i in range(len(lines)):
-        area += (lines[i,0]*lines[(i+1) % num,1] -
-                 lines[i,1]*lines[(i+1) % num, 0])
+        area += (lines[i, 0]*lines[(i+1) % num, 1] -
+                 lines[i, 1]*lines[(i+1) % num, 0])
     return n.abs(area/2.)
 
 def sanitise_domain(ps, shape=None):
@@ -1453,17 +1451,17 @@ def sanitise_domain(ps, shape=None):
         nex = ps[(i+1) % len(ps)]
         if n.abs(nex[0]-cur[0]) > 5:
             diff = n.round(nex[0] - cur[0])
-            ps[i+1:,0] -= diff
+            ps[i+1:, 0] -= diff
         if n.abs(nex[1]-cur[1]) > 5:
             diff = n.round(nex[1] - cur[1])
-            ps[i+1:,0] -= diff
+            ps[i+1:, 0] -= diff
     return ps
 
 def crude_area_from_border(lines, numsteps=100):
-    maxxs = map(lambda j: n.max(j[:,0]), lines)
-    minxs = map(lambda j: n.min(j[:,0]), lines)
-    maxys = map(lambda j: n.max(j[:,1]), lines)
-    minys = map(lambda j: n.min(j[:,1]), lines)
+    maxxs = map(lambda j: n.max(j[:, 0]), lines)
+    minxs = map(lambda j: n.min(j[:, 0]), lines)
+    maxys = map(lambda j: n.max(j[:, 1]), lines)
+    minys = map(lambda j: n.min(j[:, 1]), lines)
 
     minx = n.min(minxs)
     maxx = n.max(maxxs)
@@ -1478,7 +1476,7 @@ def crude_area_from_border(lines, numsteps=100):
     area = 0.0
 
     for x in n.linspace(minx-0.005*dx, maxx+0.005*dx, numsteps):
-        testline = n.array([[x, miny],[x, maxy]])
+        testline = n.array([[x, miny], [x, maxy]])
         #print 'testline', testline
         p = testline[0]
         r = testline[1] - testline[0]
@@ -1528,7 +1526,7 @@ def doVectorsCross(p, r, q, s):
     q = n.float64(q)
     s = n.float64(s)
     if n.abs(n.cross(r, s)) < 0.00001:
-        return (False,0.,0.)
+        return (False, 0., 0.)
 
     t = n.cross(q-p, s) / n.cross(r, s)
 
@@ -1537,10 +1535,10 @@ def doVectorsCross(p, r, q, s):
         if 0.0 < u < 1.0:
             return (True, t, u)
         return (False, t, u)
-    return (False, t,-1.0)
+    return (False, t, -1.0)
 
 def animate(filen='test', path='onephase', number=200):
-    f, d2 = random_wave_function(50,10, returnall=True)
+    f, d2 = random_wave_function(50, 10, returnall=True)
 
     amps, wvs, phases = d2
 
@@ -1558,7 +1556,7 @@ def animate(filen='test', path='onephase', number=200):
             interior = wvs.dot(xyarr) + phases
             exterior = amps*n.sin(interior)
             return n.sum(exterior)
-        a = NeumannTracer(300,300, n.pi/190, n.pi/190, f)
+        a = NeumannTracer(300, 300, n.pi/190, n.pi/190, f)
         a.plot(save='{0}_{1:04}.png'.format(filen, i))
         del a # For some reason, the reference count builds up?
 
