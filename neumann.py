@@ -88,7 +88,6 @@ class CriticalGraph(dict):
                         distance[1] += self.ynum
                 angle = n.arctan2(distance[1], distance[0])
                 angles[i] = angle
-            print angles
             order = n.argsort(angles)
             newlines = []
             for i in range(len(order)):
@@ -800,6 +799,7 @@ class NeumannTracer(object):
         max6 = n.sum(maxdegs == 6)
         max7 = n.sum(maxdegs == 7)
         max8 = n.sum(maxdegs == 8)
+        max9 = n.sum(maxdegs == 9)
         min2 = n.sum(mindegs == 2)
         min3 = n.sum(mindegs == 3)
         min4 = n.sum(mindegs == 4)
@@ -807,6 +807,7 @@ class NeumannTracer(object):
         min6 = n.sum(mindegs == 6)
         min7 = n.sum(mindegs == 7)
         min8 = n.sum(mindegs == 8)
+        min9 = n.sum(mindegs == 9)
 
         totdegrees = float(max2 + max3 + max4 + max5 + max6 + max7 + max8 +
                            min2 + min3 + min4 + min5 + min6 + min7 + min8)
@@ -818,9 +819,10 @@ class NeumannTracer(object):
         frac6 = float(max6 + min6) / totdegrees
         frac7 = float(max7 + min7) / totdegrees
         frac8 = float(max8 + min8) / totdegrees
+        frac9 = float(max9 + min9) / totdegrees
 
-        return n.array(zip(range(2, 9),
-                           (frac2, frac3, frac4, frac5, frac6, frac7, frac8)))
+        return n.array(zip(range(2, 10),
+                           (frac2, frac3, frac4, frac5, frac6, frac7, frac8, frac9)))
 
     def get_domain_areas(self):
         if not self.graph_built:
@@ -924,7 +926,8 @@ class NeumannTracer(object):
                     ax.add_patch(patch)
                 if print_patch_areas:
                     area = domain.area()
-                    pos = n.average(p, axis=0)
+                    patch_areas = map(area_from_border, ps)
+                    pos = n.average(ps[n.argmax(patch_areas)], axis=0)
                     ax.text(pos[0], pos[1],'{:.1f}'.format(area))
 
         legend_entries = []
@@ -1476,7 +1479,7 @@ def area_from_border(lines):
                  lines[i, 1]*lines[(i+1) % num, 0])
     return n.abs(area/2.)
 
-
+sanitised_domains = []
 def sanitise_domain(ps, shape=None):
     '''Takes a domain that may pass through a boundary, and sanitises
     it to have the right shape.'''
@@ -1484,6 +1487,7 @@ def sanitise_domain(ps, shape=None):
         dx, dy = None, None
     else:
         dx, dy = shape
+    ps = ps.copy()
 
     for i in range(len(ps)):
         cur = ps[i]
@@ -1493,7 +1497,8 @@ def sanitise_domain(ps, shape=None):
             ps[i+1:, 0] -= diff
         if n.abs(nex[1]-cur[1]) > 5:
             diff = n.round(nex[1] - cur[1])
-            ps[i+1:, 0] -= diff
+            ps[i+1:, 1] -= diff
+    sanitised_domains.append(ps)
     return ps
 
 
@@ -1629,6 +1634,7 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2):
 
 def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
     length = int(100/float(downscale) * float(scale)/5.)
+    print 'length is', length
     periodicity = n.sqrt(scale/2.)
     f, d2 = periodic_random_wave_function(number, scale, returnall=True)
     tracer = NeumannTracer(length, length,
@@ -1638,3 +1644,26 @@ def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
     if returnall:
         return tracer, f, d2
     return tracer
+
+
+def get_statistics_at(scales, domains=1000, downscale=3):
+    results = {}
+
+    for scale in scales:
+        print 'Getting statistics at scale', scale
+        areas = []
+        degree_dists = n.zeros((8,2))
+
+        while len(areas) < domains:
+            print 'Currently done', len(areas), 'domains'
+            a = get_periodic_tracer(scale, downscale=downscale)
+            areas.extend(a.get_domain_areas())
+            degree_dists += a.get_critical_degree_dists()
+
+        results[scale] = (areas, degree_dists)
+
+    for areas, value in results.iteritems():
+        areas, degrees = value
+        degrees /= degrees[0][0]/2.
+
+    return results
