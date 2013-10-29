@@ -141,6 +141,32 @@ class CriticalGraph(dict):
         print # Lineprint newline
         return areas
 
+    def get_domain_perimeters(self):
+        domains = self.get_closed_domains()
+        perimeters = []
+        i = 0
+        for domain in domains:
+            lineprint('\rGetting perimeter of domain %d / %d' % (i, len(domains)),
+                      False)
+            i += 1
+            perimeter = domain.perimeter()
+            perimeters.append(perimeter)
+        print # Lineprint newline
+        return perimeters
+
+    def get_domain_rhos(self):
+        domains = self.get_closed_domains()
+        rhos = []
+        i = 0
+        for domain in domains:
+            lineprint('\rGetting rho of domain %d / %d' % (i, len(domains)),
+                      False)
+            i += 1
+            rho = domain.rho()
+            rhos.append(rho)
+        print # Lineprint newline
+        return rhos
+
     def get_domain_from(self, line, dir='clockwise'):
         '''
         Returns the closed domain (or None if the algorithm fails)
@@ -276,6 +302,14 @@ the cell crosses a boundary
 
     def area(self):
         return area_from_border(self.as_sanitised_curve())
+
+    def perimeter(self):
+        points = self.as_sanitised_curve()
+        diffs = n.roll(points,-1,axis=0) - points
+        return n.sqrt(n.sum(diffs*diffs,axis=1))
+
+    def rho(self):
+        return self.area() / self.perimeter()
 
     def crude_area(self):
         return crude_area_from_border([line.points for line in self.lines])
@@ -829,6 +863,11 @@ class NeumannTracer(object):
             self.build_graph()
         return self.graph.get_domain_areas()
 
+    def get_domain_rhos(self):
+        if not self.graph_built:
+            self.build_graph()
+        return self.graph.get_domain_rhos()
+
     def build_everything(self, including_hessian=False):
         '''
         Build all the arrays and trace all the lines via the various
@@ -856,7 +895,7 @@ class NeumannTracer(object):
              print_patch_areas=False,
              figsize=None,
              show_sample_directions=False,
-             save=False):
+             save=False, figax=None):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -889,7 +928,10 @@ class NeumannTracer(object):
         saddles = n.array(saddles)
         degenerate = n.array(degenerate)
 
-        fig, ax = plt.subplots()
+        if figax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig, ax = figax
 
         if not show_domain_patches:
             ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.6)
@@ -1652,15 +1694,17 @@ def get_statistics_at(scales, domains=1000, downscale=3):
     for scale in scales:
         print 'Getting statistics at scale', scale
         areas = []
+        rhos = []
         degree_dists = n.zeros((8,2))
 
         while len(areas) < domains:
             print 'Currently done', len(areas), 'domains'
             a = get_periodic_tracer(scale, downscale=downscale)
             areas.extend(a.get_domain_areas())
+            rhos.extend(a.get_domain_rhos())
             degree_dists += a.get_critical_degree_dists()
 
-        results[scale] = (areas, degree_dists)
+        results[scale] = (areas, rhos, degree_dists)
 
     for areas, value in results.iteritems():
         areas, degrees = value
