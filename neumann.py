@@ -164,7 +164,7 @@ class CriticalGraph(dict):
             i += 1
             rho = domain.rho()
             rhos.append(rho)
-        print # Lineprint newline
+        print  # Lineprint newline
         return rhos
 
     def get_domain_from(self, line, dir='clockwise'):
@@ -306,7 +306,7 @@ the cell crosses a boundary
     def perimeter(self):
         points = self.as_sanitised_curve()
         diffs = n.roll(points,-1,axis=0) - points
-        return n.sqrt(n.sum(diffs*diffs,axis=1))
+        return n.sqrt(n.sum(n.sum(diffs*diffs,axis=1)))
 
     def rho(self):
         return self.area() / self.perimeter()
@@ -1675,6 +1675,8 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2):
 
 
 def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
+    if not duofactors(scale):
+        return None
     length = int(100/float(downscale) * float(scale)/5.)
     print 'length is', length
     periodicity = n.sqrt(scale/2.)
@@ -1694,20 +1696,24 @@ def get_statistics_at(scales, domains=1000, downscale=3):
     for scale in scales:
         print 'Getting statistics at scale', scale
         areas = []
+        perimeters = []
         rhos = []
         degree_dists = n.zeros((8,2))
 
         while len(areas) < domains:
             print 'Currently done', len(areas), 'domains'
             a = get_periodic_tracer(scale, downscale=downscale)
+            if a is None:
+                break  # None is returned if there are no compatible
+                       # periodic wavevectors
             areas.extend(a.get_domain_areas())
+            perimeters.extend(a.get_domain_perimeters())
             rhos.extend(a.get_domain_rhos())
             degree_dists += a.get_critical_degree_dists()
 
-        results[scale] = (areas, rhos, degree_dists)
+        results[scale] = (areas, perimeters, rhos, degree_dists)
 
-    for areas, value in results.iteritems():
-        areas, degrees = value
+    for areas, perimeters, rhos, degrees in results.itervalues():
         degrees /= degrees[0][0]/2.
 
     return results
