@@ -1,3 +1,135 @@
+'''
+Equations
+=========
+
+:math::
+    \psi(x,y,z) = \sum_n^N a_n \sin\left( \frac{2\pi}{\sqrt{|k|^2/2}} \vec{k_n}\cdot\vec{r} + \theta_n \right)
+
+Where:
+- :math:`a_n` is a gaussian random amplitude.
+- :math:`k_n` is a random wavevector with *integer* coefficients, and where all $k_n$ have the same magnitude.
+- :math`\theta_n` is a random phase.
+
+The `energy' parameter in the code is always :math:`|k|^2`, and does *not* include the factors of :math:`2\pi`.
+
+
+The funny prefactor ($(2\pi)/\sqrt{|k|^2/2}$) is to enforce
+periodicity when generating a torus eigenfunction. It means that as
+any component of
+:math:`r` runs from :math:`0` to $\sqrt{|k|^2/2}$, the argument of :math:`\sin` runs
+from :math:`0` to :math:`1\times` some integer, where the integer is one of the
+entires in :math:`k`.
+
+Code
+====
+  
+Wherever there is a `scale' or `energy' parameter, this refers to
+:math:`|k|^2`, and does *not* include the prefactor of :math:`2\pi` in the equation.
+
+Everything here assumes you already did:
+\begin{lstlisting}[language=Python]
+import numpy as n
+import neumann as neu
+\end{lstlisting}
+
+You can see the documentation of any python function or class
+using ~help(functionname)~. Not all of my
+code is documented this way, but some of it is.
+
+Torus eigenfunctions
+--------------------
+
+To get a torus eigenfunction
+
+\begin{lstlisting}[language=Python]
+a = neu.get_periodic_tracer(17, downscale=3)
+\end{lstlisting}
+
+The first argument (17) is the scale :math:`|k|^2`.
+
+The second argument
+(downscale=3) controls the numerical resolution of the sampled
+function - this is automatically increased as the energy increases,
+so that the number of samples per domain remains roughly
+constant. You can mostly ignore this argument entirely.
+
+The function returns a NeumannTracer object, which is a python class
+implementing all the critical point detection, domain area
+calculation, degree counting etc.
+
+Random wave models
+------------------
+
+\begin{lstlisting}[language=Python]
+func = neu.random_wave_function(number=50, mag=10)
+a = neu.NeumannTracer(100, 100, n.pi/50, n.pi/50, func)
+\end{lstlisting}
+
+The first line generates a function (func) describing a random wave
+with 'number' superposed sine waves of wavevector magnitude 'mag'.
+
+The second line creates a NeumannTracer object. The first two
+parameters (100, 100) are the X and Y sizes of the sampled array. The
+second two numbers (n.pi/50, n.pi/50) are the step size when sampling
+the random wave function. The final argument (func) is obviously the
+function generated in the first line.
+
+This isn't a very neat interface to creating random wave functions,
+and there's currently no equivalent of the hand 'get_periodic_tracer'
+function for generating eigenfunctions. I may add one.
+
+** Statistics
+
+Once you have a NeumannTracer (e.g. from neu.get_periodic_tracer),
+you can retrieve various statistics from it.
+
+\begin{lstlisting}[language=Python]
+a = neu.get_periodic_tracer(17, downscale=3)
+\end{lstlisting}
+
+If you now type a and press tab, you can see all the available
+methods of a (this is one of ipython's nice features). Most are not
+important, but the ones named 'get_...' retrieve interesting
+statistics. Specifically:
+
+- ~a.get_domain_areas()~ returns a list
+  of all recognised domain areas.
+- ~a.get_domain_perimeters()~ returns a list
+  of all recognised domain perimeters.
+- ~a.get_domain_rhos()~ returns a list
+  of the dimensionless rho parameter for each domain.
+- ~a.get_critical_degrees()~ returns a tuple
+  of lists, the first containing a list of degrees of maxima, and the
+  second containing a list of degrees of minima.
+- ~a.get_critical_degree_dists()~ returns an array
+  of critical degrees along with the fraction of critical points with
+  this number.
+  
+At the time of writing, the areas/perimeters/rhos are *not*
+normalised properly.
+
+** Plotting
+   
+Once you have a NeumannTracer, you can plot it
+with ~a.plot()~. This creates a basic
+visualisation showing the critical points and Neumann lines.
+
+You can do ~help(a.plot)~ to see the
+available arguments:
+
+\begin{lstlisting}[language=Python]
+plot(self, trace_lines=True, plot_hessian=False, show_saddle_directions=False, show_domain_patches=False, print_patch_areas=False, figsize=None, show_sample_directions=False, save=False, figax=None)
+\end{lstlisting}
+
+You can toggle most of these to see what they do. I mostly use just
+the basic plot (using the default arguments, so
+just ~a.plot()~)
+or ~a.plot(show_domain_patches=True,
+print_patch_areas=True)~ which plots the different
+colours for each domain along with the areas.
+
+'''
+
 import numpy as n
 from itertools import product
 from colorsys import hsv_to_rgb
@@ -5,6 +137,8 @@ from colorsys import hsv_to_rgb
 from matplotlib import interactive as mpl_interactive
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
+
+import random
 
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
@@ -863,6 +997,11 @@ class NeumannTracer(object):
             self.build_graph()
         return self.graph.get_domain_areas()
 
+    def get_domain_perimeters(self):
+        if not self.graph_built:
+            self.build_graph()
+        return self.graph.get_domain_perimeters()
+
     def get_domain_rhos(self):
         if not self.graph_built:
             self.build_graph()
@@ -1368,8 +1507,7 @@ def sanitise_line(l):
     return segs
 
 def random_wave_function(number=50, wvmag=5, seed=0, returnall=False):
-    if seed == 0:
-        seed = n.random.randint(10000000000)
+    seed = random.randint(0,10000000)
     generator = n.random.RandomState()
     generator.seed(seed)
 
@@ -1411,8 +1549,7 @@ def range_factors(a, b=None, best=False):
     return results
 
 def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
-    if seed == 0:
-        seed = n.random.randint(10000000000)
+    seed = random.randint(0, 1000000)
     generator = n.random.RandomState()
     generator.seed(seed)
 
@@ -1686,7 +1823,7 @@ def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
                            f,
                            to_edges='periodic')
     if returnall:
-        return tracer, f, d2
+        return tracer, f, d2, length
     return tracer
 
 
@@ -1711,9 +1848,13 @@ def get_statistics_at(scales, domains=1000, downscale=3):
             rhos.extend(a.get_domain_rhos())
             degree_dists += a.get_critical_degree_dists()
 
-        results[scale] = (areas, perimeters, rhos, degree_dists)
+        length = float(int(100/float(2) * float(scale)/5.))
+        real_length = n.sqrt(scale/2.)
+        length_factor = 1/length * real_length
 
-    for areas, perimeters, rhos, degrees in results.itervalues():
+        results[scale] = (areas, perimeters, rhos, degree_dists, length_factor)
+
+    for areas, perimeters, rhos, degrees, length_factor in results.itervalues():
         degrees /= degrees[0][0]/2.
 
     return results
