@@ -1,14 +1,14 @@
-'''
-Equations
+'''Equations
 =========
 
-:math::
-    \psi(x,y,z) = \sum_n^N a_n \sin\left( \frac{2\pi}{\sqrt{|k|^2/2}} \vec{k_n}\cdot\vec{r} + \theta_n \right)
+.. math::
+    \\psi(x,y,z) = \\sum_n^N a_n \\sin\\left( \\frac{2\\pi}{\\sqrt{|k|^2/2}} \\boldsymbol{k_n}\\cdot\\boldsymbol{r} + \\theta_n \\right)
 
 Where:
-- :math:`a_n` is a gaussian random amplitude.
-- :math:`k_n` is a random wavevector with *integer* coefficients, and where all $k_n$ have the same magnitude.
-- :math`\theta_n` is a random phase.
+
+* :math:`a_n` is a gaussian random amplitude.
+* :math:`\boldsymbol k_n` is a random wavevector with *integer* coefficients, and where all $k_n$ have the same magnitude.
+* :math:`\\theta_n` is a random phase.
 
 The `energy' parameter in the code is always :math:`|k|^2`, and does *not* include the factors of :math:`2\pi`.
 
@@ -33,7 +33,7 @@ import neumann as neu
 \end{lstlisting}
 
 You can see the documentation of any python function or class
-using ~help(functionname)~. Not all of my
+using `help(functionname)`. Not all of my
 code is documented this way, but some of it is.
 
 Torus eigenfunctions
@@ -60,10 +60,8 @@ calculation, degree counting etc.
 Random wave models
 ------------------
 
-\begin{lstlisting}[language=Python]
-func = neu.random_wave_function(number=50, mag=10)
-a = neu.NeumannTracer(100, 100, n.pi/50, n.pi/50, func)
-\end{lstlisting}
+    func = neu.random_wave_function(number=50, mag=10)
+    a = neu.NeumannTracer(100, 100, n.pi/50, n.pi/50, func)
 
 The first line generates a function (func) describing a random wave
 with 'number' superposed sine waves of wavevector magnitude 'mag'.
@@ -78,55 +76,51 @@ This isn't a very neat interface to creating random wave functions,
 and there's currently no equivalent of the hand 'get_periodic_tracer'
 function for generating eigenfunctions. I may add one.
 
-** Statistics
+Statistics
+----------
 
 Once you have a NeumannTracer (e.g. from neu.get_periodic_tracer),
 you can retrieve various statistics from it.
 
-\begin{lstlisting}[language=Python]
-a = neu.get_periodic_tracer(17, downscale=3)
-\end{lstlisting}
+    a = neu.get_periodic_tracer(17, downscale=3)
 
 If you now type a and press tab, you can see all the available
 methods of a (this is one of ipython's nice features). Most are not
 important, but the ones named 'get_...' retrieve interesting
 statistics. Specifically:
 
-- ~a.get_domain_areas()~ returns a list
+- `a.get_domain_areas()` returns a list
   of all recognised domain areas.
-- ~a.get_domain_perimeters()~ returns a list
+- `a.get_domain_perimeters()` returns a list
   of all recognised domain perimeters.
-- ~a.get_domain_rhos()~ returns a list
+- `a.get_domain_rhos()` returns a list
   of the dimensionless rho parameter for each domain.
-- ~a.get_critical_degrees()~ returns a tuple
+- `a.get_critical_degrees()` returns a tuple
   of lists, the first containing a list of degrees of maxima, and the
   second containing a list of degrees of minima.
-- ~a.get_critical_degree_dists()~ returns an array
+- `a.get_critical_degree_dists()` returns an array
   of critical degrees along with the fraction of critical points with
   this number.
   
 At the time of writing, the areas/perimeters/rhos are *not*
 normalised properly.
 
-** Plotting
+Plotting
+--------
    
 Once you have a NeumannTracer, you can plot it
-with ~a.plot()~. This creates a basic
+with `a.plot()`. This creates a basic
 visualisation showing the critical points and Neumann lines.
 
-You can do ~help(a.plot)~ to see the
+You can do `help(a.plot)` to see the
 available arguments:
 
-\begin{lstlisting}[language=Python]
-plot(self, trace_lines=True, plot_hessian=False, show_saddle_directions=False, show_domain_patches=False, print_patch_areas=False, figsize=None, show_sample_directions=False, save=False, figax=None)
-\end{lstlisting}
+    plot(self, trace_lines=True, plot_hessian=False, show_saddle_directions=False, show_domain_patches=False, print_patch_areas=False, figsize=None, show_sample_directions=False, save=False, figax=None)
 
 You can toggle most of these to see what they do. I mostly use just
-the basic plot (using the default arguments, so
-just ~a.plot()~)
-or ~a.plot(show_domain_patches=True,
-print_patch_areas=True)~ which plots the different
-colours for each domain along with the areas.
+the basic plot (using the default arguments, so just `a.plot()`) or
+`a.plot(show_domain_patches=True, print_patch_areas=True)` which plots
+the different colours for each domain along with the areas.
 
 '''
 
