@@ -7,58 +7,59 @@
 Where:
 
 * :math:`a_n` is a gaussian random amplitude.
-* :math:`\boldsymbol k_n` is a random wavevector with *integer* coefficients, and where all $k_n$ have the same magnitude.
+* :math:`\\boldsymbol k_n` is a random wavevector with *integer* coefficients, and where all $k_n$ have the same magnitude.
 * :math:`\\theta_n` is a random phase.
 
-The `energy' parameter in the code is always :math:`|k|^2`, and does *not* include the factors of :math:`2\pi`.
+An 'energy' parameter in the code is always :math:`|k|^2`, and does
+*not* include the factors of :math:`2\pi`. This is the root of the
+normalisation problems!
 
-
-The funny prefactor ($(2\pi)/\sqrt{|k|^2/2}$) is to enforce
+The funny prefactor (:math:`(2\pi)/\sqrt{|k|^2/2}`) is to enforce
 periodicity when generating a torus eigenfunction. It means that as
 any component of
-:math:`r` runs from :math:`0` to $\sqrt{|k|^2/2}$, the argument of :math:`\sin` runs
-from :math:`0` to :math:`1\times` some integer, where the integer is one of the
-entires in :math:`k`.
+:math:`r` runs from :math:`0` to :math:`\sqrt{|k|^2/2}`, the argument of :math:`\sin` runs
+from :math:`0` to :math:`1\\times` some integer, where the integer is one of the
+components of :math:`k`.
 
 Code
 ====
   
-Wherever there is a `scale' or `energy' parameter, this refers to
+Wherever there is a scale or energy parameter, this refers to
 :math:`|k|^2`, and does *not* include the prefactor of :math:`2\pi` in the equation.
 
-Everything here assumes you already did:
-\begin{lstlisting}[language=Python]
-import numpy as n
-import neumann as neu
-\end{lstlisting}
+Everything here assumes you already did::
 
-You can see the documentation of any python function or class
-using `help(functionname)`. Not all of my
-code is documented this way, but some of it is.
+    import numpy as n
+    import neumann as neu
+
+You can see the documentation of any python function or class using
+`help(functionname)`. Not all of my code is documented this way, but
+some of it is. Any functions with docstrings are also documented on
+this page.
 
 Torus eigenfunctions
 --------------------
 
-To get a torus eigenfunction
+To get a torus eigenfunction::
 
-\begin{lstlisting}[language=Python]
-a = neu.get_periodic_tracer(17, downscale=3)
-\end{lstlisting}
+    a = neu.get_periodic_tracer(17, downscale=3)
 
-The first argument (17) is the scale :math:`|k|^2`.
+The first argument (`17`) is the scale :math:`|k|^2`.
 
 The second argument
-(downscale=3) controls the numerical resolution of the sampled
+(`downscale=3`) controls the numerical resolution of the sampled
 function - this is automatically increased as the energy increases,
 so that the number of samples per domain remains roughly
 constant. You can mostly ignore this argument entirely.
 
-The function returns a NeumannTracer object, which is a python class
+The function returns a :class:`NeumannTracer` object, which is a python class
 implementing all the critical point detection, domain area
 calculation, degree counting etc.
 
 Random wave models
 ------------------
+
+You can sample a section of a true random wave (no integer limitation on wavevectors) with::
 
     func = neu.random_wave_function(number=50, mag=10)
     a = neu.NeumannTracer(100, 100, n.pi/50, n.pi/50, func)
@@ -113,7 +114,7 @@ with `a.plot()`. This creates a basic
 visualisation showing the critical points and Neumann lines.
 
 You can do `help(a.plot)` to see the
-available arguments:
+available arguments::
 
     plot(self, trace_lines=True, plot_hessian=False, show_saddle_directions=False, show_domain_patches=False, print_patch_areas=False, figsize=None, show_sample_directions=False, save=False, figax=None)
 
@@ -121,6 +122,12 @@ You can toggle most of these to see what they do. I mostly use just
 the basic plot (using the default arguments, so just `a.plot()`) or
 `a.plot(show_domain_patches=True, print_patch_areas=True)` which plots
 the different colours for each domain along with the areas.
+
+
+Module documentation
+====================
+
+The individual classes and functions of neumann.py are documented below.
 
 '''
 
@@ -516,16 +523,14 @@ class NeumannTracer(object):
     information to store information about it in an array.
 
     Args:
-    - xnum: Number of x pixels to sample
-    - ynum: Number of y pixels to sample
-    - dx: Step length dx for each pixel
-    - dy: Step length dy for each pixel
-    - func: A function to look for critical points in
-    - start_point: The (x, y) tuple to take as (0, 0) in the function.
-    - to_edges: May be False (ignore edges),
-                'periodic' (use periodic boundary conditions) or
-                'fourier' (periodic with a -1 factor if passing
-                           through the boundary).
+
+    * xnum: Number of x pixels to sample
+    * ynum: Number of y pixels to sample
+    * dx: Step length dx for each pixel
+    * dy: Step length dy for each pixel
+    * func: A function to look for critical points in
+    * start_point: The (x, y) tuple to take as (0, 0) in the function.
+    * to_edges: May be False (ignore edges), 'periodic' (use periodic boundary conditions) or 'fourier' (periodic with a -1 factor if passing through the boundary).
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
