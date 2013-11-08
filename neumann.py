@@ -2016,7 +2016,7 @@ def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
         return tracer, f, d2, length
     return tracer
 
-def save_results_at(scales, domains=1000, downscale=3, filen='neumann_results'):
+def save_domain_results_at(scales, domains=1000, downscale=3, filen='neumann_results'):
     '''Runs get_statistics_at with the same arguments, and saves the
     results in a file starting with filen'''
     import cPickle
@@ -2038,7 +2038,7 @@ def save_results_at(scales, domains=1000, downscale=3, filen='neumann_results'):
     return results
     
 
-def get_statistics_at(scales, domains=1000, downscale=3):
+def get_domain_statistics_at(scales, domains=1000, downscale=3):
     '''For every scale in scales, generates random torus eigenfunctions at
     that scale, counting the domains unitl it has found at least the
     number specified as an argument.
@@ -2077,3 +2077,29 @@ def get_statistics_at(scales, domains=1000, downscale=3):
 
     return results
 
+def get_degree_statistics(scale=65, downscale=7, runs=100):
+    threes = []
+    fours = []
+    fives = []
+    sixs = []
+    sevens = []
+    eights = []
+    nines = []
+    for i in range(runs):
+        tracer = get_periodic_tracer(scale, downscale=downscale)
+        degrees = tracer.get_critical_degrees()
+        mindegs, maxdegs = degrees
+        mindegs = n.array(mindegs)
+        threes.append(n.sum(mindegs==3))
+        fours.append(n.sum(mindegs==4))
+        fives.append(n.sum(mindegs==5))
+        sixs.append(n.sum(mindegs==6))
+        sevens.append(n.sum(mindegs==7))
+        eights.append(n.sum(mindegs==8))
+        nines.append(n.sum(mindegs==9))
+
+    return [threes, fours, fives, sixs, sevens, eights, nines]
+        
+        
+
+        
