@@ -206,7 +206,10 @@ The tracer then just works as normal, so you can to (for instance)::
 
 to get a list of Neumann domain areas in the function you passed over the range of the function.
    
-    
+
+Pickled data
+------------
+
 
 
 Module documentation
@@ -226,6 +229,11 @@ from matplotlib.patches import Polygon
 
 import random
 import os
+
+try:
+    import mayavi.mlab as may
+except ImportError:
+    print 'Failed to import mayavi. 3d plotting will not work.'
 
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
@@ -266,6 +274,8 @@ class CriticalGraph(dict):
         self.xnum = xnum
         self.ynum = ynum
         self.nodes_aligned = False
+        self.closed_domains = []
+        self.got_closed_domains = False
 
     def add_or_edit_node(self, node_coords, node_type, new_line):
         '''
@@ -316,7 +326,7 @@ class CriticalGraph(dict):
             self[key][1] = newlines
         self.nodes_aligned = True
 
-    def get_closed_domains(self):
+    def get_closed_domains(self, recreate=False):
         '''
         Returns a list of all closed domains, recognised by walking
         clockwise or anticlockwise from every saddle point.
@@ -326,6 +336,8 @@ class CriticalGraph(dict):
         '''
         if not self.nodes_aligned:
             self.align_nodes()
+        if self.got_closed_domains and not recreate:
+            return self.closed_domains
         blighted_starts = []
         domains = []
         for start in self:
@@ -347,6 +359,10 @@ class CriticalGraph(dict):
             if vertices not in domain_keys:
                 domain_keys.append(vertices)
                 unique_domains.append(domain)
+
+        self.closed_domains = unique_domains
+        self.got_closed_domains = True
+
         return unique_domains
 
     def get_domain_areas(self):
@@ -374,6 +390,21 @@ class CriticalGraph(dict):
             perimeters.append(perimeter)
         print # Lineprint newline
         return perimeters
+
+    def get_domain_diameters(self):
+        domains = self.get_closed_domains()
+        diameters = []
+        i = 0
+        for domain in domains:
+            lineprint('\rGetting diameter of domain %d / %d' % (i, len(domains)),
+                      False)
+            i += 1
+            diameter = domain.diameter()
+            if diameter is not None:
+                diameters.append(diameter)
+        print # Lineprint newline
+        return diameters
+            
 
     def get_domain_rhos(self):
         domains = self.get_closed_domains()
@@ -465,6 +496,19 @@ class NeumannDomain(object):
         self.minnum = minima
         self.sadnum = saddles
 
+    def diameter(self):
+        '''Returns the 'diameter' of the domain, the distance between its
+        critical points.'''
+        crits = []
+        for line in self.lines:
+            if line.end_type in ['maximum', 'minimum']:
+                crits.append(line.end)
+        if len(crits) != 2:
+            return None  # Domain detected incorrectly!
+        else:
+            return mag(n.array(crits[1]) - n.array(crits[0]))
+                
+
     def as_closed_curve(self):
         '''Joins the component lines and returns a single 2d array of points
         making up the domain boundary.
@@ -476,6 +520,7 @@ class NeumannDomain(object):
         return n.vstack(points)
 
     def as_sanitised_curves(self):
+        '''Not implemented.'''
         pass
 
     def as_closed_curves(self):
@@ -506,7 +551,7 @@ class NeumannDomain(object):
 
     def as_sanitised_curve(self):
         '''Joins the component lines and shifts by the width of the torus if
-the cell crosses a boundary
+        the cell crosses a boundary.
 
         '''
         return sanitise_domain(self.as_closed_curve())
@@ -707,6 +752,40 @@ class NeumannTracer(object):
         self.crits_dict = critical_points_to_index_dict(self.crits)
 
         self.found_crits = True
+
+    def get_critical_points(self):
+        '''Find the critical points, and return (minima, maxima).'''
+        if not self.found_crits:
+            self.find_critical_points()
+        return (self.minima, self.maxima)
+
+    def get_nearest_neighbours(self):
+        '''Return a list of distances from maxima to the nearest minimum.
+
+        It does *not* respect periodic boundary conditions, so the
+        distances could be lower, but the effect probably isn't
+        significant if there are many domains.
+
+        '''
+        minima, maxima = self.get_critical_points()
+        minima = n.array(minima)
+        maxima = n.array(maxima)
+        minima_done = n.ones(len(minima), dtype=bool)
+        distances = []
+
+        for i in range(len(maxima)):
+            dist = 1000.
+            match_index = 0
+            for j in range(len(minima)):
+                if minima_done[j]:
+                    cur_dist = mag(minima[j] - maxima[i])
+                    if cur_dist < dist:
+                        dist = cur_dist
+                        match_index = j
+            minima_done[j] = False
+            distances.append(dist)
+        return distances
+                
 
     def critical_point_proximity_alert(self):
         pass
@@ -1087,6 +1166,11 @@ class NeumannTracer(object):
             self.build_graph()
         return self.graph.get_domain_perimeters()
 
+    def get_domain_diameters(self):
+        if not self.graph_built:
+            self.build_graph()
+        return self.graph.get_domain_diameters()
+
     def get_domain_rhos(self):
         if not self.graph_built:
             self.build_graph()
@@ -1265,7 +1349,7 @@ class NeumannTracer(object):
             fig.savefig(filen)
 
         return fig, ax
-    def plot3d(self, clf=True):
+    def plot3d(self, clf=True, save=''):
         import mayavi.mlab as may
         if clf:
             may.clf()
@@ -1338,6 +1422,9 @@ class NeumannTracer(object):
             may.points3d(maxima[:, 0], maxima[:, 1], maximumzs,
                          color=(0, 0, 1), scale_factor=1.5,
                          extent=maximumextent)
+
+        if save:
+            may.savefig(save)
 
 def get_filled_array(xnum, ynum, dx, dy, func, start_point=(0.0, 0.0)):
     arr = n.zeros((xnum, ynum), dtype=n.float64)
@@ -1849,17 +1936,21 @@ def doVectorsCross(p, r, q, s):
     return (False, t, -1.0)
 
 
-def animate(filen='test', path='onephase', number=200):
-    f, d2 = random_wave_function(50, 10, returnall=True)
+def animate(filen='test', path='onephase', number=200, function=None):
+    if function is None:
+        f, d2 = random_wave_function(50, 10, returnall=True)
+    else:
+        f, d2 = function
 
     amps, wvs, phases = d2
+    phases -= 2 * (2*n.pi)/50
 
     for i in range(number):
         if path == 'allphase':
             phases += 2*n.pi/number
         elif path[:9] == 'manyphase':
             val = int(path[9:])
-            phases[:val] += 2*n.pi/number
+            phases[:val] += 1/number * 4*(2*n.pi/50)
         else:
             phases[0] += 2*n.pi/number
 
@@ -1869,20 +1960,27 @@ def animate(filen='test', path='onephase', number=200):
             interior = wvs.dot(xyarr) + phases
             exterior = amps*n.sin(interior)
             return n.sum(exterior)
-        a = NeumannTracer(300, 300, n.pi/190, n.pi/190, f)
+        a = NeumannTracer(100, 100, n.pi/190, n.pi/190, f, start_point=(-30*n.pi/190, -30*n.pi/190))
         a.plot(save='{0}_{1:04}.png'.format(filen, i))
         del a  # For some reason, the reference count builds up?
 
 
-def periodic_animate(scale=5, number=50, frames=200, downscale=2):
+def periodic_animate(scale=5, number=50, frames=200, downscale=2, func=None, plot3d=False):
     length = int(100/float(downscale) * float(scale)/5.)
     periodicity = n.sqrt(scale/2.)
 
-    f, d2 = periodic_random_wave_function(number, scale, returnall=True)
+    if func is None:
+        f, d2 = periodic_random_wave_function(number, scale, returnall=True)
+    else:
+        f, d2 = func
     amps, wvs, phases = d2
 
+    phases = phases.copy()
+    phases += 25 * 2*n.pi/frames
+
     for i in range(frames):
-        phases[0] += 2*n.pi/frames
+        #phases += 2*n.pi/frames
+        phases += (4*2*n.pi/frames) / frames
 
         def func(x, y):
             res = 0.0
@@ -1892,8 +1990,11 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2):
             return n.sum(exterior)
         a = NeumannTracer(length, length,
                           periodicity/float(length), periodicity/float(length),
-                          func, to_edges=True)
+                          func, to_edges='periodic')
         a.plot(save='panim1_{0:04}.png'.format(i))
+        if plot3d:
+            a.plot3d(save='panim3d_{0:04}.png'.format(i))
+
 
 
 def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
