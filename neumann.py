@@ -235,6 +235,11 @@ try:
 except ImportError:
     print 'Failed to import mayavi. 3d plotting will not work.'
 
+try:
+    import igraph as ig
+except ImportError:
+    print 'Failed to import igraph. Using igraph tools may crash the program!'
+    
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
 
@@ -691,6 +696,7 @@ class NeumannTracer(object):
 
         self.graph = CriticalGraph(xnum, ynum)
         self.domains = []
+        self.igraph = None
 
         self.upsample_regions = []
 
@@ -919,21 +925,22 @@ class NeumannTracer(object):
 
                 # Check here whether the line has gone in totally the
                 # wrong direction. Try a simple retest if so.
-                if endcoord is not None and False:
-                    origangle = n.arctan2(coords[1]-saddley, coords[0]-saddlex)
-                    endangle = n.arctan2(endcoord[1]-saddley,
-                                         endcoord[0]-saddlex)
-                    angle_diff = (endangle % (2*n.pi)) - (origangle % (2*n.pi))
-                    if angle_diff > n.pi:
-                        angle_diff -= n.pi
-                    if angle_diff > n.pi/2:
-                        print 'resampling line', origangle, endangle,'from', coords
-                        points, endcoord = trace_gradient_line(
-                            coords[0] + 0.5*diff[0], coords[1] + 0.5*diff[1],
-                            self.dx, self.dy,
-                            self.xnum, self.ynum, self.func,
-                            self.crits_dict, self.start_point,
-                            direction, self.to_edges)
+                if endcoord is not None and len(points) > 5:
+                    first_vec = n.array(points[1]) - n.array(points[0])
+                    last_vec = n.array(points[-1]) - n.array(points[-2])
+
+                    ang_diff = n.arccos(first_vec.dot(last_vec) / (mag(first_vec) * mag(last_vec)))
+                    ang_diff = n.abs(ang_diff)
+
+                    if ang_diff > 0.6*n.pi:
+                        points, endcoord = trace_gradient_line(coords[0] + 0.3*diff[0],
+                                                               coords[1] + 0.3*diff[1],
+                                                               self.dx, self.dy,
+                                                               self.xnum, self.ynum,
+                                                               self.func, self.crits_dict,
+                                                               self.start_point,
+                                                               direction, self.to_edges)
+
 
                 if len(points) > 4:
                     points = points[4:]
@@ -1046,6 +1053,28 @@ class NeumannTracer(object):
 
         self.graph_built = True
 
+    def build_igraph(self):
+        if not self.graph_built:
+            self.build_graph()
+        crit_graph = self.graph
+
+        nodes = crit_graph.keys()
+        numbers_dict = {}
+        for node, number in zip(nodes, range(len(nodes))):
+            numbers_dict[node] = number
+
+        g = ig.Graph()
+        g.add_vertices(len(nodes))
+        for node in crit_graph:
+            crit_type, lines = crit_graph[node]
+            if crit_type == 'saddle':
+                for line in lines:
+                    end = line.end
+                    g.add_edge(numbers_dict[node], numbers_dict[end])
+        self.igraph = g
+        return g
+        
+        
     def get_recognised_domains(self):
         '''Get the list of all closed Neumann domains in self.graph (created
         by self.build_graph)
