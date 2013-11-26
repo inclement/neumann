@@ -282,6 +282,92 @@ class CriticalGraph(dict):
         self.closed_domains = []
         self.got_closed_domains = False
 
+    def dual_graph(self):
+        '''Returns the dual graph of self, where neumann domains are the new
+        vertices, and edges exist between domains bounding one another.'''
+
+        self.align_nodes()
+        nodes = self.keys()
+
+        labels_by_crit = {}
+        for node in nodes:
+            labels_by_crit[node] = []
+
+        # For each node, label domains as the clockwise neighbours of incoming lines
+        current_index = 0
+        for critical_point, data in self.iteritems():
+            for line in data[1]:
+                labels_by_crit[critical_point].append(current_index)
+                current_index += 1
+
+        # Build a dictionary of equalities between node labels
+        equivalent_labels = {}
+        for critical_point, data in self.iteritems():
+            lines = data[1]
+            for i in range(len(lines)):
+                line = lines[i]
+                current_node_label = labels_by_crit[critical_point][i]
+
+                other_end = line.end
+                other_line_index = self.incoming_index(other_end, critical_point)
+                other_possibilities = labels_by_crit[other_end]
+                matching_index = (other_line_index-1) % len(other_possibilities)
+                other_node_label = other_possibilities[matching_index]
+
+                if current_node_label not in equivalent_labels:
+                    equivalent_labels[current_node_label] = set()
+                if other_node_label not in equivalent_labels:
+                    equivalent_labels[other_node_label] = set()
+                equivalent_labels[current_node_label].add(other_node_label)
+                equivalent_labels[other_node_label].add(current_node_label)
+
+        for i in range(10):
+            for label, equivs in equivalent_labels.iteritems():
+                equivs.add(label)
+                for equiv in equivs:
+                    for equiv2 in equivs:
+                        equivalent_labels[equiv].add(equiv2)
+            
+        real_labels = {}
+        # Replace all the labels with one number
+        for label, equivs in equivalent_labels.iteritems():
+            if real_labels.has_key(label):
+                pass
+            else:
+                for equiv in equivs:
+                    real_labels[equiv] = label
+
+        real_labels_by_crit = {}
+        for label, domains in labels_by_crit.iteritems():
+            real_labels_by_crit[label] = map(lambda j: real_labels[j], domains)
+
+        # Create the connections list
+        connections = {}
+        for label, reallabel in real_labels.iteritems():
+            if connections.has_key(reallabel):
+                pass
+            else:
+                connections[reallabel] = set()
+
+        for crit, domains in real_labels_by_crit.iteritems():
+            for i in range(len(domains)):
+                prev_domain = domains[(i-1) % len(domains)]
+                cur_domain = domains[i]
+                next_domain = domains[(i+1) % len(domains)]
+                if next_domain != cur_domain:
+                    connections[cur_domain].add(next_domain)
+                if prev_domain != cur_domain:
+                    connections[cur_domain].add(prev_domain)
+
+        return connections
+                
+                
+
+        # Build a dictionary of connections between the new nodes
+
+        # Build an igraph representation
+            
+
     def add_or_edit_node(self, node_coords, node_type, new_line):
         '''
         Add the line new_line to the node with coords node_coords. If this
@@ -479,6 +565,19 @@ class CriticalGraph(dict):
             elif crit_type == 'minimum':
                 minnums.append(len(lines))
         return maxnums, minnums, sadnums
+
+    def incoming_index(self, node, coords):
+        '''Returns the index (if any) of incoming lines from coords to
+        node.'''
+        lines = self[node][1]
+        matches = filter(lambda j: j.end == coords, lines)
+        if len(matches) == 1:
+            return lines.index(matches[0])
+        elif len(matches) > 1:
+            return lines.index(matches[0])
+            raise Exception('Two incoming lines from the same node!?')
+        else:
+            return None
 
 class NeumannDomain(object):
     '''Represents a Neumann domain by storing a list of boundary
@@ -1074,6 +1173,24 @@ class NeumannTracer(object):
         self.igraph = g
         return g
         
+    def get_igraph_dual(self):
+        if not self.graph_built:
+            self.build_graph()
+        dual = self.graph.dual_graph()
+
+        numbers_dict = {}
+        nodes = dual.keys()
+        for node, number in zip(nodes, range(len(nodes))):
+            numbers_dict[node] = number
+
+        g = ig.Graph()
+        g.add_vertices(len(dual))
+        for node, adjacent in dual.iteritems():
+            for other_node in adjacent:
+                g.add_edge(numbers_dict[node], numbers_dict[other_node])
+        self.dual_graph = g
+        return g
+            
         
     def get_recognised_domains(self):
         '''Get the list of all closed Neumann domains in self.graph (created
