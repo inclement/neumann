@@ -1226,6 +1226,7 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
+
     def plot(self, trace_lines=True, plot_hessian=False,
              show_saddle_directions=False,
              show_domain_patches=False,
@@ -1378,6 +1379,110 @@ class NeumannTracer(object):
             fig.savefig(filen)
 
         return fig, ax
+
+    def plot_bokeh(self, trace_lines=True, plot_hessian=False,
+                   show_saddle_directions=False,
+                   show_domain_patches=False,
+                   print_patch_areas=False,
+                   figsize=None,
+                   show_sample_directions=False,
+                   save=False, figax=None):
+        '''Duplicate plot method using bokeh rather than matplotlib.
+        
+        Plot and return a graph showing (optionally):
+        - Neumann lines
+        - Hessian domains
+        - Hessian eigenvectors at detected saddles
+        - Coloured patches representing each closed Neumann domain
+
+        '''
+
+        try:
+            import bokeh.plotting as plotting
+        except ImportError:
+            print 'Failed to import bokeh. Cancelling plot.'
+            return
+
+        plotting.output_file("bokehtest.html", title="bokeh test?")
+        
+        if not self.arr_filled:
+            self.fill_arr()
+        if not self.found_crits:
+            self.find_critical_points()
+        if not self.traced_lines and trace_lines:
+            self.trace_neumann_lines()
+        if not self.hessian_filled and plot_hessian:
+            self.make_hessian_array()
+        if not self.found_domains and show_domain_patches:
+            self.get_recognised_domains()
+
+        plotarr = n.rot90(self.arr[::-1], 3)
+
+        #fig, ax = plot_arr_with_crits(plotarr, self.crits)
+        maxima, minima, saddles, degenerate = self.crits
+        maxima = n.array(maxima)
+        minima = n.array(minima)
+        saddles = n.array(saddles)
+        degenerate = n.array(degenerate)
+
+        # Show heightmap image
+        # ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.6)
+
+        # Set axis scales
+        # Remove ticks
+
+        if show_domain_patches:
+            patch_colours = []
+            patch_xs = []
+            patch_ys = []
+            for domain in self.domains:
+                colour = hsv_to_rgb(n.random.random(), 1., 1.)
+                ps = domain.as_closed_curves()
+                for p in ps:
+                    patch_xs.append(p[:,0])
+                    patch_ys.append(p[:,1])
+                    patch_colours.append(colour)
+            plotting.patches(patch_xs, patch_ys, fill_color=patch_colours,
+                             fill_alpha=0.7, line_color='black',
+                             line_width=0.5)
+                # Print patch areas
+
+        legend_entries = []
+        if len(maxima) > 0:
+            plotting.scatter(maxima[:,0], maxima[:,1], name='maxima',
+                             color='#ff0000')
+            legend_entries.append('maxima')
+        if len(minima) > 0:
+            plotting.scatter(minima[:,0], minima[:,1], name='minima',
+                             color='#0000ff')
+            legend_entries.append('minima')
+        if len(saddles) > 0:
+            plotting.scatter(saddles[:,0], saddles[:,1], name='saddles',
+                             color='#ffff00')
+            legend_entries.append('saddles')
+        if len(degenerate) > 0:
+            plotting.scatter(degenerate[:,0], degenerate[:,1],
+                             name='degenerate', color='#ffffff')
+            legend_entries.append('degenerate')
+
+        # Contours of plotarr
+
+        if trace_lines:
+            for line in self.lines:
+                segs = sanitise_line(line)
+                for seg in segs: 
+                    plotting.line(seg[:, 0], seg[:,1], color='#DD00DD')
+
+        # Plot hessian imarr
+            # hessian_arr = n.rot90(self.hessian_arr[::-1], 3)
+            # ax.imshow(n.sign(hessian_arr), cmap='binary',
+            #           interpolation='none', alpha=0.5)
+            # ax.contour(hessian_arr, levels=[0],
+            #            linewidths=2, alpha=0.6, color='cyan')
+
+        plotting.show()
+
+
     def plot3d(self, clf=True, save=''):
         import mayavi.mlab as may
         if clf:
