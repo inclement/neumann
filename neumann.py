@@ -1152,7 +1152,7 @@ class NeumannTracer(object):
 
         self.graph_built = True
 
-    def build_igraph(self):
+    def get_igraph(self):
         if not self.graph_built:
             self.build_graph()
         crit_graph = self.graph
@@ -2257,7 +2257,7 @@ def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False):
         return None
     length = int(100/float(downscale) * float(scale)/5.)
     print 'length is', length
-    periodicity = n.sqrt(scale/2.)
+    periodicity = float(n.sqrt(scale/2.))
     f, d2 = periodic_random_wave_function(number, scale, returnall=True)
     tracer = NeumannTracer(length, length,
                            periodicity/(1.*length), periodicity/(1.*length),

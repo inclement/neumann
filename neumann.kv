@@ -1,0 +1,50 @@
+#:import plasma_shader main.plasma_shader
+#:import gradient_shader main.gradient_shader
+#:import tunnel_fly_shader main.tunnel_fly_shader
+
+<Interface>:
+    shader_display: shader
+    resolution_slider: size_slider
+    orientation: 'vertical'
+    NeumannShader:
+        id: shader
+        fbo_size: map(int, (size_slider.value, size_slider.value))
+    BoxLayout:
+        size_hint_y: None
+        height: dp(40)
+        Widget:
+            size_hint_x: None
+            width: dp(5)
+        Label:
+            size_hint_x: None
+            width: self.texture_size[0] if self.texture_size[0] is not None else 10
+            text: 'Resolution:'
+        Slider:
+            orientation: 'horizontal'
+            id: size_slider
+            min: 5
+            max: 200
+            value: 100
+        Label:
+            size_hint_x: None
+            width: sp(40)
+            text: str(int(size_slider.value))
+    Button:
+        size_hint_y: None
+        height: sp(40)
+        text: 'Generate new wavevectors'
+        on_press: shader.set_periodic_shader(shader.scale, shader.number, shader.downscale)
+
+<NeumannShader>:
+    fs: gradient_shader
+    fbo_size: self.size
+
+<-ShaderWidget>:
+    canvas:
+        Color:
+            rgba: 1, 1, 1, 1
+        Rectangle:
+            texture: self.fbo_texture
+            tex_coords: [0, 0, 1, 0, 1, 1, 0, 1]
+            pos: self.pos
+            size: self.size
