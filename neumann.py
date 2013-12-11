@@ -1350,6 +1350,7 @@ class NeumannTracer(object):
              print_patch_areas=False,
              figsize=None,
              show_sample_directions=False,
+             plot_gradients=False,
              save=False, figax=None):
         '''
         Plot and return a graph showing (optionally):
@@ -1392,6 +1393,20 @@ class NeumannTracer(object):
             ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.6)
         else:
             ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.4)
+
+        if plot_gradients:
+            grad_arr = self.arr.copy()
+            sx, sy = self.start_point
+            dx, dy = self.dr
+            xnum, ynum = self.shape
+            for x in range(xnum):
+                lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+                for y in range(ynum):
+                    gradient = grad(self.func, sx+x*dx, sy+y*dy, dx, dy)
+                    grad_arr[x, y] = n.arctan2(gradient[1], gradient[0])
+            ax.imshow(grad_arr, cmap='hsv', interpolation='none')
+
+        print
 
         ax.set_xlim(0, plotarr.shape[0])
         ax.set_ylim(0, plotarr.shape[1])
