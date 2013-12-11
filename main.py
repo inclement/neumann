@@ -4,8 +4,11 @@ gpu, via a kivy app.
 '''
 
 from kivy.app import App
-from kivy.properties import StringProperty, ListProperty, NumericProperty, ObjectProperty
+from kivy.properties import (StringProperty, ListProperty, NumericProperty,
+                             ObjectProperty, BooleanProperty, NumericProperty)
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.popup import Popup
+from kivy.uix.scrollview import ScrollView
 from kivy.clock import Clock
 
 from shaderwidget import ShaderWidget
@@ -37,6 +40,8 @@ shader_uniforms = '''
 uniform vec2 resolution;
 uniform float period;
 uniform float max_intensity;
+uniform float gradient_opacity;
+uniform float phase_increment;
 '''
 
 shader_top = '''
@@ -57,6 +62,26 @@ vec3 intensity_to_colour(float intensity)
         }
 }
 
+
+float superposition_function(float pos_x, float pos_y)
+{
+    float value = 0.0;
+
+'''
+
+shader_bottom = '''
+
+    return value;
+}
+
+float gradient(float pos_x, float pos_y, float dr)
+{
+    float dfdx = (superposition_function(pos_x + dr, pos_y) - superposition_function(pos_x, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y + dr) - superposition_function(pos_x, pos_y)) / dr;
+
+    return atan(dfdy, dfdx);
+}
+
 void main(void)
 {
     float x = gl_FragCoord.x;
@@ -65,14 +90,23 @@ void main(void)
     float pos_x = x / resolution.x * period;
     float pos_y = y / resolution.y * period;
 
-    float value = 0.0;
+    float dr = period / resolution.x * 0.015;
 
-'''
+    float value = superposition_function(pos_x, pos_y);
 
-shader_bottom = '''
-   vec3 rgbcol = intensity_to_colour(value / max_intensity);
+    vec3 intensity_col;
+    vec3 gradient_col;
+    intensity_col = intensity_to_colour(value / max_intensity);
+    gl_FragColor = vec4(intensity_col.x, intensity_col.y, intensity_col.z, 1.0);
 
-   gl_FragColor = vec4(rgbcol.x, rgbcol.y, rgbcol.z, 1.0);
+    if (gradient_opacity < 0.001) {
+    } else {
+        gl_FragColor = vec4(intensity_col.x, intensity_col.y, intensity_col.z, 1.0);
+        gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr), 1.0, 1.0));
+
+        gl_FragColor = vec4(gradient_col.x*gradient_opacity + intensity_col.x*(1.0-gradient_opacity), gradient_col.y*gradient_opacity + intensity_col.y*(1.0-gradient_opacity), gradient_col.z*gradient_opacity + intensity_col.z*(1.0-gradient_opacity), 1.0);
+    }
+    
 }
 '''
 
@@ -121,7 +155,7 @@ def get_periodic_wavevectors(number=50, scale=5, seed=0):
         wv = [2*pi/sqrt(scale/2.) * entry for entry in wv]
         wvs.append(wv)
 
-    return list(wvs)
+    return list(wvs), phases
 
 class AdvancedShader(ShaderWidget):
 
@@ -146,38 +180,28 @@ class AdvancedShader(ShaderWidget):
         self.fbo['resolution'] = map(float, self.fbo_size)
 
     def replace_shader(self, *args):
-        self.fs = (header + shader_uniforms + self.shader_uniforms +
-                   shader_top + self.shader_mid + shader_bottom)
-
-class CriticalShader(AdvancedShader):
-    intensity_texture = ObjectProperty()
-    def __init__(self, *args, **kwargs):
-        super(CriticalShader, self).__init__(*args, **kwargs)
-        self.fs = gradient_shader
-        self.update_glsl()
-    def on_intensity_texture(self, *args):
-        self.fbo['intensity_texture'] = intensity_texture
-    def on_fs(self, *args):
-        super(CriticalShader, self).on_fs(*args)
-        print 'Critical fs changed to'
-        print self.fs
-        self.update_glsl()
-    def on_intensity_texture(self, *args):
-        self.update_glsl()
-    def update_glsl(self, *args):
-        super(CriticalShader, self).update_glsl(*args)
-        print 'fbo_size is', self.fbo_size
-        #self.fbo['intensity_texture'] = self.intensity_texture
+        new_fs = (header + shader_uniforms + self.shader_parameters +
+                  shader_top + self.shader_mid + shader_bottom)
+        print 'new_fs is', new_fs
+        self.fs = new_fs
 
 class NeumannShader(AdvancedShader):
     wavevectors = ListProperty([])
+    phases = ListProperty([])
     period = NumericProperty(1.0)
     scale = NumericProperty(0)
     number = NumericProperty(0)
     downscale = NumericProperty(0)
+    gradient_opacity = NumericProperty(0.0)
+    shader_parameters = StringProperty('')
+    phase_increment = NumericProperty(0.0)
     def __init__(self, *args, **kwargs):
         super(NeumannShader, self).__init__(*args, **kwargs)
         self.set_periodic_shader(scale=17, number=50)
+    def on_phase_increment(self, *args):
+        self.fbo['phase_increment'] = float(self.phase_increment)
+    def on_gradient_opacity(self, *args):
+        self.update_glsl()
 
     def set_periodic_shader(self, scale=5, number=10, downscale=2):
         if not duofactors(scale):
@@ -199,23 +223,25 @@ class NeumannShader(AdvancedShader):
 
         self.period = float(sqrt(scale/2.))
 
-        new_wavevectors = get_periodic_wavevectors(number, scale) 
-        self.wavevectors = map(list, new_wavevectors)
+        new_wavevectors, new_phases = get_periodic_wavevectors(number, scale) 
+        self.wavevectors = zip(map(list, new_wavevectors), map(float, new_phases))
 
     def on_wavevectors(self, *args):
         shader_mid = ''
-        shader_uniforms = ''
+        shader_parameters = ''
         i = 0
         for wv in self.wavevectors:
             current_uniform = 'k{}'.format(i)
-            shader_uniforms += ('''
+            current_phase = 'phase{}'.format(i)
+            shader_parameters += ('''
             uniform vec2 {};
-            ''').format(current_uniform)
+            uniform float {};
+            ''').format(current_uniform, current_phase)
             shader_mid += ('''
-            value += sin({cu}.x * pos_x + {cu}.y * pos_y);
-            ''').format(cu=current_uniform)
+            value += sin({cu}.x * pos_x + {cu}.y * pos_y + {ph} + phase_increment);
+            ''').format(cu=current_uniform, ph=current_phase)
             i += 1
-        self.shader_uniforms = shader_uniforms
+        self.shader_parameters = shader_parameters
         self.shader_mid = shader_mid
         self.replace_shader()
         self.update_glsl()
@@ -223,12 +249,28 @@ class NeumannShader(AdvancedShader):
     def update_glsl(self, *args):
         super(NeumannShader, self).update_glsl(*args)
 
-        for number, wv in zip(count(), self.wavevectors):
-            current_uniform = 'k{}'.format(number)
-            self.fbo[current_uniform] = [float(wv[0]), float(wv[1])]
+        for number, param in zip(count(), self.wavevectors):
+            wv, phase = param
+            print 'wv is', wv
+            print 'phase is', phase
+            current_wv = 'k{}'.format(number)
+            current_phase = 'phase{}'.format(number)
+            self.fbo[current_wv] = [float(wv[0]), float(wv[1])]
+            self.fbo[current_phase] = phase
             number += 1
         self.fbo['period'] = float(self.period)
-        self.fbo['max_intensity'] = float(sqrt(max(1.0, float(len(self.wavevectors)))))
+        self.fbo['max_intensity'] = float(2*sqrt(max(1.0, float(len(self.wavevectors)))))
+        self.fbo['gradient_opacity'] = self.gradient_opacity
+        self.fbo['phase_increment'] = float(self.phase_increment)
+
+    def view_wavevectors(self, *args):
+        WvPopup(content=WvPopupContent(wavevectors=self.wavevectors)).open()
+
+class WvPopup(Popup):
+    wavevectors = ListProperty([])
+
+class WvPopupContent(BoxLayout):
+    wavevectors = ListProperty([])
 
 class Interface(BoxLayout):
     shader_display = ObjectProperty()

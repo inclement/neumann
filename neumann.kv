@@ -1,6 +1,7 @@
 #:import plasma_shader main.plasma_shader
 #:import gradient_shader main.gradient_shader
 #:import tunnel_fly_shader main.tunnel_fly_shader
+#:import main main
 
 <Interface>:
     shader_display: shader
@@ -10,9 +11,48 @@
         NeumannShader:
             id: shader
             fbo_size: map(int, (size_slider.value, size_slider.value))
-        CriticalShader:
-            id: critical_shader
-            intensity_texture: shader.fbo_texture
+            gradient_opacity: float(opacity_slider.value)
+            phase_increment: float(phase_slider.value)
+    BoxLayout:
+        size_hint_y: None
+        height: dp(40)
+        Widget:
+            size_hint_x: None
+            width: dp(5)
+        Label:
+            size_hint_x: None
+            width: self.texture_size[0] if self.texture_size[0] is not None else 10
+            text: 'Grad overlay:'
+        Slider:
+            orientation: 'horizontal'
+            id: opacity_slider
+            min: 0.
+            max: 1.
+            value: 0.
+        Label:
+            size_hint_x: None
+            width: sp(40)
+            text: str(opacity_slider.value)[:4]
+    BoxLayout:
+        size_hint_y: None
+        height: dp(40)
+        Widget:
+            size_hint_x: None
+            width: dp(5)
+        Label:
+            size_hint_x: None
+            width: self.texture_size[0] if self.texture_size[0] is not None else 10
+            text: 'Phase increment:'
+        Slider:
+            orientation: 'horizontal'
+            id: phase_slider
+            min: 0.
+            max: 2*3.14159265
+            value: 0.
+        Label:
+            size_hint_x: None
+            width: sp(40)
+            text: str(phase_slider.value)[:4]
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -28,16 +68,20 @@
             id: size_slider
             min: 5
             max: 1000
-            value: 100
+            value: 500
         Label:
             size_hint_x: None
             width: sp(40)
             text: str(int(size_slider.value))
-    Button:
+    BoxLayout:
         size_hint_y: None
         height: sp(40)
-        text: 'Generate new wavevectors'
-        on_press: shader.set_periodic_shader(shader.scale, shader.number, shader.downscale)
+        Button:
+            text: 'Generate new\n  wavevectors'
+            on_press: shader.set_periodic_shader(shader.scale, shader.number, shader.downscale)
+        Button:
+            text: 'View wavevectors'
+            on_press: shader.view_wavevectors()
 
 <NeumannShader>:
     fs: gradient_shader
@@ -55,3 +99,22 @@
             tex_coords: [0, 0, 1, 0, 1, 1, 0, 1]
             pos: self.pos
             size: self.size
+
+<WvPopupContent>:
+    ScrollView:
+        GridLayout:
+            cols: 1
+            size_hint_y: None
+            height: thetb.texture_size[1]
+            Label:
+                id: thetb
+                halign: 'center'
+                size_hint_y: None
+                text_size: self.width-10, None
+                height: self.texture_size[1]
+                text: '\n'.join(map(lambda j: '[{:.2f}, {:.2f}] with phase {}'.format(j[0][0], j[0][1], j[1]), root.wavevectors))
+                
+
+<WvPopup>:
+    size_hint: 0.9, 0.9
+    title: 'Wavevectors'
