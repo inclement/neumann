@@ -6,9 +6,13 @@
     shader_display: shader
     resolution_slider: size_slider
     orientation: 'vertical'
-    NeumannShader:
-        id: shader
-        fbo_size: map(int, (size_slider.value, size_slider.value))
+    BoxLayout:
+        NeumannShader:
+            id: shader
+            fbo_size: map(int, (size_slider.value, size_slider.value))
+        CriticalShader:
+            id: critical_shader
+            intensity_texture: shader.fbo_texture
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -23,7 +27,7 @@
             orientation: 'horizontal'
             id: size_slider
             min: 5
-            max: 200
+            max: 1000
             value: 100
         Label:
             size_hint_x: None
@@ -38,6 +42,9 @@
 <NeumannShader>:
     fs: gradient_shader
     fbo_size: self.size
+
+<CriticalShader>:
+    shader_uniforms: 'uniform Sampler2D intensity_texture;\n\n'
 
 <-ShaderWidget>:
     canvas:

@@ -11,8 +11,10 @@ from kivy.clock import Clock
 from shaderwidget import ShaderWidget
 
 import random
-import numpy as n
 from itertools import count
+from math import sqrt, pi
+
+__version__ = '0.1'
 
 header = '''
 #ifdef GL_ES
@@ -26,6 +28,11 @@ varying vec2 tex_coord0;
 /* uniform texture samplers */
 uniform sampler2D texture0;
 '''
+
+simple_shader_uniforms = '''
+uniform vec2 resolution;
+'''
+
 shader_uniforms = '''
 uniform vec2 resolution;
 uniform float period;
@@ -80,68 +87,97 @@ with open('plasma.glsl') as fileh:
     plasma_shader = header + shader_uniforms + fileh.read()
 
 with open('gradient.glsl') as fileh:
-    gradient_shader = header + shader_uniforms + fileh.read()
+    gradient_shader = header + simple_shader_uniforms + fileh.read()
 
 with open('tunnel_fly.glsl') as fileh:
     tunnel_fly_shader = header + shader_uniforms + fileh.read()
 
 def duofactors(k):
     outs = []
-    for i in range(int(n.sqrt(k))+2):
-        for j in range(i, int(n.sqrt(k))+2):
+    for i in range(int(sqrt(k))+2):
+        for j in range(i, int(sqrt(k))+2):
             if (i**2 + j**2) == k:
                 outs.append((i, j))
     return outs
 
 def get_periodic_wavevectors(number=50, scale=5, seed=0):
     seed = random.randint(0, 1000000)
-    generator = n.random.RandomState()
+    generator = random.Random()
     generator.seed(seed)
 
     possible_wvs = duofactors(scale)
-    possible_signs = map(n.array, [[1, 1], [1, -1], [-1, 1], [-1, -1]])
+    possible_signs = [[1, 1], [1, -1], [-1, 1], [-1, -1]]
 
-    amps = generator.normal(size=number)
-    phases = 2*n.pi*generator.rand(number)
-    wvs = n.zeros((number, 2), dtype=n.float64)
+    amps = [generator.gauss(1, 1) for i in range(number)]
+    phases = [2*pi*generator.random() for i in range(number)]
+    wvs = [] #n.zeros((number, 2), dtype=n.float64)
 
     for i in range(number):
-        wv = n.array(possible_wvs[generator.randint(len(possible_wvs))],
-                     dtype=n.float64)
+        wv = map(float, generator.choice(possible_wvs))
         generator.shuffle(wv)
-        wv *= possible_signs[generator.randint(len(possible_signs))]
-        wv *= 2*n.pi/n.sqrt(scale/2.)
-        wvs[i] = wv
+        random_sign = generator.choice(possible_signs)
+        wv[0] *= random_sign[0]
+        wv[1] *= random_sign[1]
+        wv = [2*pi/sqrt(scale/2.) * entry for entry in wv]
+        wvs.append(wv)
 
     return list(wvs)
 
-
-class NeumannShader(ShaderWidget):
-    wavevectors = ListProperty([])
+class AdvancedShader(ShaderWidget):
 
     shader_mid = StringProperty('')
     shader_uniforms = StringProperty('')
-    period = NumericProperty(1.0)
     fbo_texture = ObjectProperty(None, allownone=True)
 
-    scale = NumericProperty(0)
-    number = NumericProperty(0)
-    downscale = NumericProperty(0)
-
-    def __init__(self, *args, **kwargs):
-        super(NeumannShader, self).__init__(*args, **kwargs)
-        self.set_periodic_shader(scale=65, number=50)
 
     def on_fs(self, *args):
-        super(NeumannShader, self).on_fs(*args)
-        # print 'new fs is:'
-        # print self.fs
+        super(AdvancedShader, self).on_fs(*args)
+        self.fbo_texture = self.fbo.texture
 
     def on_fbo_size(self, *args):
-        super(NeumannShader, self).on_fbo_size(*args)
+        super(AdvancedShader, self).on_fbo_size(*args)
         self.fbo.size = self.fbo_size
         self.fbo_texture = self.fbo.texture
         self.update_glsl()
+
+    def update_glsl(self, *args):
+        super(AdvancedShader, self).update_glsl(*args)
+
+        self.fbo['resolution'] = map(float, self.fbo_size)
+
+    def replace_shader(self, *args):
+        self.fs = (header + shader_uniforms + self.shader_uniforms +
+                   shader_top + self.shader_mid + shader_bottom)
+
+class CriticalShader(AdvancedShader):
+    intensity_texture = ObjectProperty()
+    def __init__(self, *args, **kwargs):
+        super(CriticalShader, self).__init__(*args, **kwargs)
+        self.fs = gradient_shader
+        self.update_glsl()
+    def on_intensity_texture(self, *args):
+        self.fbo['intensity_texture'] = intensity_texture
+    def on_fs(self, *args):
+        super(CriticalShader, self).on_fs(*args)
+        print 'Critical fs changed to'
+        print self.fs
+        self.update_glsl()
+    def on_intensity_texture(self, *args):
+        self.update_glsl()
+    def update_glsl(self, *args):
+        super(CriticalShader, self).update_glsl(*args)
+        print 'fbo_size is', self.fbo_size
+        #self.fbo['intensity_texture'] = self.intensity_texture
+
+class NeumannShader(AdvancedShader):
+    wavevectors = ListProperty([])
+    period = NumericProperty(1.0)
+    scale = NumericProperty(0)
+    number = NumericProperty(0)
+    downscale = NumericProperty(0)
+    def __init__(self, *args, **kwargs):
+        super(NeumannShader, self).__init__(*args, **kwargs)
+        self.set_periodic_shader(scale=17, number=50)
 
     def set_periodic_shader(self, scale=5, number=10, downscale=2):
         if not duofactors(scale):
@@ -161,12 +197,10 @@ class NeumannShader(ShaderWidget):
             #     slider.max = length+1
             # self.parent.resolution_slider.value = length
 
-        self.period = float(n.sqrt(scale/2.))
+        self.period = float(sqrt(scale/2.))
 
         new_wavevectors = get_periodic_wavevectors(number, scale) 
-        print 'new_wavevectors are', new_wavevectors
         self.wavevectors = map(list, new_wavevectors)
-        print 'set them.'
 
     def on_wavevectors(self, *args):
         shader_mid = ''
@@ -188,24 +222,13 @@ class NeumannShader(ShaderWidget):
 
     def update_glsl(self, *args):
         super(NeumannShader, self).update_glsl(*args)
-        print 'self.fs is', self.fs
-
-        self.fbo['resolution'] = map(float, self.fbo_size)
-        print 'set resolution to', map(float, self.fbo_size)
 
         for number, wv in zip(count(), self.wavevectors):
             current_uniform = 'k{}'.format(number)
             self.fbo[current_uniform] = [float(wv[0]), float(wv[1])]
             number += 1
         self.fbo['period'] = float(self.period)
-        print 'set period to', float(self.period)
-
-        self.fbo['max_intensity'] = float(n.sqrt(max(1.0, float(len(self.wavevectors)))))
-        print 'set max_intensity to', max(1.0, float(len(self.wavevectors))) 
-
-    def replace_shader(self, *args):
-        self.fs = (header + shader_uniforms + self.shader_uniforms +
-                   shader_top + self.shader_mid + shader_bottom)
+        self.fbo['max_intensity'] = float(sqrt(max(1.0, float(len(self.wavevectors)))))
 
 class Interface(BoxLayout):
     shader_display = ObjectProperty()
