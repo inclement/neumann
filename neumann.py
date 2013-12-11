@@ -1344,6 +1344,20 @@ class NeumannTracer(object):
         if not self.hessian_filled and including_hessian:
             self.make_hessian_array()
 
+    def get_gradients_array(self):
+        print 'Calculating gradients array...'
+        grad_arr = self.arr.copy()
+        sx, sy = self.start_point
+        dx, dy = self.dr
+        xnum, ynum = self.shape
+        for x in range(xnum):
+            lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+            for y in range(ynum):
+                gradient = grad(self.func, sx+x*dx, sy+y*dy, dx, dy)
+                grad_arr[x, y] = n.arctan2(gradient[1], gradient[0])
+        print
+        return grad_arr
+
     def plot(self, trace_lines=True, plot_hessian=False,
              show_saddle_directions=False,
              show_domain_patches=False,
@@ -1395,18 +1409,9 @@ class NeumannTracer(object):
             ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.4)
 
         if plot_gradients:
-            grad_arr = self.arr.copy()
-            sx, sy = self.start_point
-            dx, dy = self.dr
-            xnum, ynum = self.shape
-            for x in range(xnum):
-                lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
-                for y in range(ynum):
-                    gradient = grad(self.func, sx+x*dx, sy+y*dy, dx, dy)
-                    grad_arr[x, y] = n.arctan2(gradient[1], gradient[0])
+            grad_arr = self.get_gradients_array()
+            grad_arr = n.rot90(grad_arr[::-1], 3)
             ax.imshow(grad_arr, cmap='hsv', interpolation='none')
-
-        print
 
         ax.set_xlim(0, plotarr.shape[0])
         ax.set_ylim(0, plotarr.shape[1])
