@@ -48,11 +48,16 @@
             id: phase_slider
             min: 0.
             max: 2*3.14159265
-            value: 0.
+            value: shader.phase_increment
         Label:
             size_hint_x: None
             width: sp(40)
             text: str(phase_slider.value)[:4]
+        Button:
+            size_hint_x: None
+            width: sp(60)
+            text: 'animate'
+            on_press: shader.animate_phase_increment(5)
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -68,7 +73,7 @@
             id: size_slider
             min: 5
             max: 1000
-            value: 500
+            value: 500 
         Label:
             size_hint_x: None
             width: sp(40)
@@ -76,9 +81,20 @@
     BoxLayout:
         size_hint_y: None
         height: sp(40)
+        Label:
+            text: 'Scale:'
+            size_hint_x: None
+            width: self.texture_size[0] + 10
+        TextInput:
+            id: scale_input
+            font_size: dp(20)
+            text: '17'
+            multiline: False
+            on_text_validate: shader.set_periodic_shader(scale_input.text, shader.number, shader.downscale)
         Button:
+            id: new_wv_button
             text: 'Generate new\n  wavevectors'
-            on_press: shader.set_periodic_shader(shader.scale, shader.number, shader.downscale)
+            on_press: shader.set_periodic_shader(scale_input.text, shader.number, shader.downscale)
         Button:
             text: 'View wavevectors'
             on_press: shader.view_wavevectors()
@@ -112,7 +128,7 @@
                 size_hint_y: None
                 text_size: self.width-10, None
                 height: self.texture_size[1]
-                text: '\n'.join(map(lambda j: '[{:.2f}, {:.2f}] with phase {}'.format(j[0][0], j[0][1], j[1]), root.wavevectors))
+                text: '\n'.join(map(lambda j: 'amp: {:.2f}, wv: [{:.2f}, {:.2f}], phase {:.2f}'.format(j[2], j[0][0], j[0][1], j[1]), root.wavevectors))
                 
 
 <WvPopup>:

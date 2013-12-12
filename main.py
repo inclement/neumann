@@ -10,11 +10,13 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy.uix.scrollview import ScrollView
 from kivy.clock import Clock
+from kivy.animation import Animation
 
 from shaderwidget import ShaderWidget
 
 import random
 from itertools import count
+from functools import partial
 from math import sqrt, pi
 
 __version__ = '0.1'
@@ -42,6 +44,7 @@ uniform float period;
 uniform float max_intensity;
 uniform float gradient_opacity;
 uniform float phase_increment;
+uniform float nearbys;
 '''
 
 shader_top = '''
@@ -74,12 +77,25 @@ shader_bottom = '''
     return value;
 }
 
+vec2 grad(float pos_x, float pos_y, float dr) {
+    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    return vec2(dfdx, dfdy);
+}
+
+mat2 rotmat(float angle) {
+    return mat2(cos(angle), -1.0*sin(angle), sin(angle), cos(angle));
+}
+
+float mag(vec2 vector) {
+    return sqrt(vector.x*vector.x + vector.y*vector.y);
+}
+
 float gradient(float pos_x, float pos_y, float dr)
 {
-    float dfdx = (superposition_function(pos_x + dr, pos_y) - superposition_function(pos_x, pos_y)) / dr;
-    float dfdy = (superposition_function(pos_x, pos_y + dr) - superposition_function(pos_x, pos_y)) / dr;
+    vec2 current_gradient = grad(pos_x, pos_y, dr);
 
-    return atan(dfdy, dfdx);
+    return atan(current_gradient.y, current_gradient.x) + 3.14159265;
 }
 
 void main(void)
@@ -90,22 +106,25 @@ void main(void)
     float pos_x = x / resolution.x * period;
     float pos_y = y / resolution.y * period;
 
-    float dr = period / resolution.x * 0.015;
+    float dr = period / resolution.x;
 
     float value = superposition_function(pos_x, pos_y);
 
     vec3 intensity_col;
     vec3 gradient_col;
     intensity_col = intensity_to_colour(value / max_intensity);
-    gl_FragColor = vec4(intensity_col.x, intensity_col.y, intensity_col.z, 1.0);
 
     if (gradient_opacity < 0.001) {
-    } else {
         gl_FragColor = vec4(intensity_col.x, intensity_col.y, intensity_col.z, 1.0);
-        gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr), 1.0, 1.0));
+    } else {
+        gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr) / (2.0*3.1416), 1.0, 1.0));
 
-        gl_FragColor = vec4(gradient_col.x*gradient_opacity + intensity_col.x*(1.0-gradient_opacity), gradient_col.y*gradient_opacity + intensity_col.y*(1.0-gradient_opacity), gradient_col.z*gradient_opacity + intensity_col.z*(1.0-gradient_opacity), 1.0);
+        gl_FragColor = vec4(gradient_col.x*gradient_opacity + intensity_col.x*(1.0-gradient_opacity),
+                            gradient_col.y*gradient_opacity + intensity_col.y*(1.0-gradient_opacity),
+                            gradient_col.z*gradient_opacity + intensity_col.z*(1.0-gradient_opacity),
+                            1.0);
     }
+
     
 }
 '''
@@ -142,7 +161,7 @@ def get_periodic_wavevectors(number=50, scale=5, seed=0):
     possible_wvs = duofactors(scale)
     possible_signs = [[1, 1], [1, -1], [-1, 1], [-1, -1]]
 
-    amps = [generator.gauss(1, 1) for i in range(number)]
+    amps = [generator.gauss(0, 1) for i in range(number)]
     phases = [2*pi*generator.random() for i in range(number)]
     wvs = [] #n.zeros((number, 2), dtype=n.float64)
 
@@ -155,7 +174,7 @@ def get_periodic_wavevectors(number=50, scale=5, seed=0):
         wv = [2*pi/sqrt(scale/2.) * entry for entry in wv]
         wvs.append(wv)
 
-    return list(wvs), phases
+    return list(wvs), phases, amps
 
 class AdvancedShader(ShaderWidget):
 
@@ -195,15 +214,38 @@ class NeumannShader(AdvancedShader):
     gradient_opacity = NumericProperty(0.0)
     shader_parameters = StringProperty('')
     phase_increment = NumericProperty(0.0)
+    animation = ObjectProperty(None, allownone=True)
     def __init__(self, *args, **kwargs):
         super(NeumannShader, self).__init__(*args, **kwargs)
         self.set_periodic_shader(scale=17, number=50)
     def on_phase_increment(self, *args):
         self.fbo['phase_increment'] = float(self.phase_increment)
+    def animate_phase_increment(self, time):
+        if self.animation is not None:
+            self.stop_animation()
+            return
+        anim = Animation(phase_increment=2*pi,
+                         t='linear',
+                         duration=(1 - self.phase_increment/(2*pi)) * time)
+        anim.bind(on_complete=partial(self.repeat_animation, time))
+        self.animation = anim
+        anim.start(self)
+    def repeat_animation(self, time, *args):
+        self.phase_increment = 0.
+        self.animation = None
+        self.animate_phase_increment(time)
+    def stop_animation(self, *args):
+        if self.animation is not None:
+            self.animation.cancel(self)
+            self.animation = None
     def on_gradient_opacity(self, *args):
         self.update_glsl()
 
     def set_periodic_shader(self, scale=5, number=10, downscale=2):
+        try:
+            scale = int(scale)
+        except ValueError:
+            return  # If user entered a wrong value
         if not duofactors(scale):
             return False
 
@@ -223,8 +265,8 @@ class NeumannShader(AdvancedShader):
 
         self.period = float(sqrt(scale/2.))
 
-        new_wavevectors, new_phases = get_periodic_wavevectors(number, scale) 
-        self.wavevectors = zip(map(list, new_wavevectors), map(float, new_phases))
+        new_wavevectors, new_phases, new_amplitudes = get_periodic_wavevectors(number, scale) 
+        self.wavevectors = zip(map(list, new_wavevectors), map(float, new_phases), new_amplitudes)
 
     def on_wavevectors(self, *args):
         shader_mid = ''
@@ -233,13 +275,15 @@ class NeumannShader(AdvancedShader):
         for wv in self.wavevectors:
             current_uniform = 'k{}'.format(i)
             current_phase = 'phase{}'.format(i)
+            current_amp = 'amp{}'.format(i)
             shader_parameters += ('''
             uniform vec2 {};
             uniform float {};
-            ''').format(current_uniform, current_phase)
+            uniform float {};
+            ''').format(current_uniform, current_phase, current_amp)
             shader_mid += ('''
-            value += sin({cu}.x * pos_x + {cu}.y * pos_y + {ph} + phase_increment);
-            ''').format(cu=current_uniform, ph=current_phase)
+            value += {amp}*sin({cu}.x * pos_x + {cu}.y * pos_y + {ph} + phase_increment);
+            ''').format(amp=current_amp, cu=current_uniform, ph=current_phase)
             i += 1
         self.shader_parameters = shader_parameters
         self.shader_mid = shader_mid
@@ -250,18 +294,19 @@ class NeumannShader(AdvancedShader):
         super(NeumannShader, self).update_glsl(*args)
 
         for number, param in zip(count(), self.wavevectors):
-            wv, phase = param
-            print 'wv is', wv
-            print 'phase is', phase
+            wv, phase, amp = param
             current_wv = 'k{}'.format(number)
             current_phase = 'phase{}'.format(number)
+            current_amp = 'amp{}'.format(number)
             self.fbo[current_wv] = [float(wv[0]), float(wv[1])]
             self.fbo[current_phase] = phase
+            self.fbo[current_amp] = amp
             number += 1
         self.fbo['period'] = float(self.period)
         self.fbo['max_intensity'] = float(2*sqrt(max(1.0, float(len(self.wavevectors)))))
         self.fbo['gradient_opacity'] = self.gradient_opacity
         self.fbo['phase_increment'] = float(self.phase_increment)
+        self.fbo['nearbys'] = float(1.0)
 
     def view_wavevectors(self, *args):
         WvPopup(content=WvPopupContent(wavevectors=self.wavevectors)).open()

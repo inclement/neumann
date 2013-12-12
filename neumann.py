@@ -243,6 +243,15 @@ except ImportError:
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
 
+def rotation_matrix(angle):
+    return n.array([[n.cos(angle), -n.sin(angle)],
+                    [n.sin(angle), n.cos(angle)]])
+
+def angle_between_vectors(a, b):
+    '''Returns the angle between the two vectors, calculated via the dot
+    product.'''
+    return n.arccos(a.dot(b) / (mag(a)*mag(b)))
+
 class UpsampleRegion(object):
     def __init__(self, sx, sy, lx, ly, degree=1):
         self.sx = sx
@@ -260,6 +269,7 @@ class UpsampleRegion(object):
         return False
 
 class CriticalGraph(dict):
+
     '''A dict subclass representing the graph of Neumann nodes (critical
     points) and their connections (Neumann gradient lines). Nodes are
     stored via their coordinates, with node information as [node type,
@@ -1358,6 +1368,43 @@ class NeumannTracer(object):
         print
         return grad_arr
 
+    def get_nearby_gradients_array(self):
+        print 'Calculating nearby gradients array...'
+        grad_arr = self.arr.copy()
+        sx, sy = self.start_point
+        dx, dy = self.dr
+        xnum, ynum = self.shape
+        for x in range(xnum):
+            lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+            for y in range(ynum):
+                gradient = grad(self.func, sx+x*dx, sy+y*dy, dx, dy)
+                orthdir = rotation_matrix(n.pi/2).dot(gradient)
+                orthdir /= mag(orthdir)
+                orthdir /= 20.
+
+                orth_grad_1 = grad(self.func, sx+x*dx + orthdir[0], sy+y*dy + orthdir[1],
+                                   dx, dy)
+                orth_grad_2 = grad(self.func, sx+x*dx - orthdir[0], sy+y*dy - orthdir[1],
+                                   dx, dy)
+
+                angle1 = n.arctan2(orth_grad_1[1], orth_grad_1[0])
+                anglegrad = n.arctan2(gradient[1], gradient[0])
+                angle2 = n.arctan2(orth_grad_2[1], orth_grad_2[0])
+
+                corr_1 = n.abs(anglegrad - angle1)
+                if corr_1 > n.pi:
+                    corr_1 -= n.pi
+                corr_2 = n.abs(anglegrad - angle2)
+                if corr_2 > n.pi:
+                    corr_2 -= n.pi
+
+                # rel_ang_1 = angle_between_vectors(orth_grad_1, gradient)
+                # rel_ang_2 = angle_between_vectors(orth_grad_2, gradient)
+
+                grad_arr[x, y] = n.exp(-1 * (corr_1 + corr_2)**2 / (n.pi/4)**2)
+        print
+        return grad_arr
+
     def plot(self, trace_lines=True, plot_hessian=False,
              show_saddle_directions=False,
              show_domain_patches=False,
@@ -1365,6 +1412,7 @@ class NeumannTracer(object):
              figsize=None,
              show_sample_directions=False,
              plot_gradients=False,
+             plot_nearby_gradients=False,
              save=False, figax=None):
         '''
         Plot and return a graph showing (optionally):
@@ -1412,6 +1460,10 @@ class NeumannTracer(object):
             grad_arr = self.get_gradients_array()
             grad_arr = n.rot90(grad_arr[::-1], 3)
             ax.imshow(grad_arr, cmap='hsv', interpolation='none')
+        if plot_nearby_gradients:
+            grad_arr = self.get_nearby_gradients_array()
+            grad_arr = n.rot90(grad_arr[::-1], 3)
+            ax.imshow(grad_arr, cmap='pink', interpolation='none')
 
         ax.set_xlim(0, plotarr.shape[0])
         ax.set_ylim(0, plotarr.shape[1])
