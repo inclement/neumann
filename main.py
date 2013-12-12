@@ -19,7 +19,7 @@ from itertools import count
 from functools import partial
 from math import sqrt, pi
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 header = '''
 #ifdef GL_ES
@@ -98,6 +98,15 @@ float gradient(float pos_x, float pos_y, float dr)
     return atan(current_gradient.y, current_gradient.x) + 3.14159265;
 }
 
+/*
+vec3 get_correlation_at(float pos_x, float pos_y, float dr) {
+    vec2 local_grad = grad(pos_x, pos_y, dr);
+    vec2 orth_dir = rotmat(3.14159/2.0) * local_grad;
+    orth_dir = orth_dir / mag(orth_dir);
+
+}
+*/
+
 void main(void)
 {
     float x = gl_FragCoord.x;
@@ -112,18 +121,19 @@ void main(void)
 
     vec3 intensity_col;
     vec3 gradient_col;
+    vec3 correlation_col;
     intensity_col = intensity_to_colour(value / max_intensity);
+    gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr) / (2.0*3.1416), 1.0, 1.0));
+    
+    /*
+    float corr = get_correlation_at(pos_x, pos_y, dr);
+    float correlation_col = vec3(1.0-corr, 1.0-corr, 1.0-corr);
+*/
 
-    if (gradient_opacity < 0.001) {
-        gl_FragColor = vec4(intensity_col.x, intensity_col.y, intensity_col.z, 1.0);
-    } else {
-        gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr) / (2.0*3.1416), 1.0, 1.0));
-
-        gl_FragColor = vec4(gradient_col.x*gradient_opacity + intensity_col.x*(1.0-gradient_opacity),
-                            gradient_col.y*gradient_opacity + intensity_col.y*(1.0-gradient_opacity),
-                            gradient_col.z*gradient_opacity + intensity_col.z*(1.0-gradient_opacity),
-                            1.0);
-    }
+    gl_FragColor = vec4(gradient_col.x*gradient_opacity + intensity_col.x*(1.0-gradient_opacity),
+                        gradient_col.y*gradient_opacity + intensity_col.y*(1.0-gradient_opacity),
+                        gradient_col.z*gradient_opacity + intensity_col.z*(1.0-gradient_opacity),
+                        1.0);
 
     
 }

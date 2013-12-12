@@ -238,7 +238,7 @@ except ImportError:
 try:
     import igraph as ig
 except ImportError:
-    print 'Failed to import igraph. Using igraph tools may crash the program!'
+    print 'Failed to import igraph. Using igraph tools may crash the program'
     
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
