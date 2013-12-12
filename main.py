@@ -326,6 +326,8 @@ class Interface(BoxLayout):
 class NeumannApp(App):
     def build(self):
         return Interface()
+    def on_pause(self):
+        return True
 
 if __name__ == "__main__":
     NeumannApp().run()
