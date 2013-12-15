@@ -11,6 +11,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.scrollview import ScrollView
 from kivy.clock import Clock
 from kivy.animation import Animation
+from kivy.graphics import BindTexture
 
 from shaderwidget import ShaderWidget
 
@@ -38,13 +39,33 @@ simple_shader_uniforms = '''
 uniform vec2 resolution;
 '''
 
-shader_uniforms = '''
+universal_shader_uniforms = '''
 uniform vec2 resolution;
+'''
+
+correlation_shader_uniforms = '''
+uniform float correlation_width;
+uniform float orth_jump;
+'''
+
+neumann_shader_uniforms = '''
 uniform float period;
 uniform float max_intensity;
-uniform float gradient_opacity;
 uniform float phase_increment;
-uniform float nearbys;
+'''
+
+inversion_shader = header + universal_shader_uniforms + '''
+uniform sampler2D input_texture;
+
+void main(void) {
+    float x = gl_FragCoord.x;
+    float y = gl_FragCoord.y;
+    float pos_x = x / resolution.x;
+    float pos_y = y / resolution.y;
+    vec4 cin = texture2D(input_texture, vec2(pos_x, pos_y));
+    gl_FragColor = vec4(1.0-cin.x, 1.0-cin.y, 1.0-cin.z, 1.0);
+}
+    
 '''
 
 shader_top = '''
@@ -72,8 +93,7 @@ float superposition_function(float pos_x, float pos_y)
 
 '''
 
-shader_bottom = '''
-
+correlation_shader_bottom = '''
     return value;
 }
 
@@ -98,14 +118,86 @@ float gradient(float pos_x, float pos_y, float dr)
     return atan(current_gradient.y, current_gradient.x) + 3.14159265;
 }
 
-/*
-vec3 get_correlation_at(float pos_x, float pos_y, float dr) {
+float get_correlation_at(float pos_x, float pos_y, float dr) {
     vec2 local_grad = grad(pos_x, pos_y, dr);
     vec2 orth_dir = rotmat(3.14159/2.0) * local_grad;
     orth_dir = orth_dir / mag(orth_dir);
 
+    vec2 orth_grad_1 = grad(pos_x - orth_dir.x * orth_jump, pos_y - orth_dir.y * orth_jump, dr);
+    vec2 orth_grad_2 = grad(pos_x + orth_dir.x * orth_jump, pos_y + orth_dir.y * orth_jump, dr);
+
+    float orth_angle_1 = atan(orth_grad_1.y, orth_grad_1.x);
+    float orth_angle_2 = atan(orth_grad_2.y, orth_grad_2.y);
+    float angle_grad = atan(local_grad.y, local_grad.x);
+
+    float relative_angle_1 = angle_grad - orth_angle_1;
+    if (relative_angle_1 > 3.14159) {
+        relative_angle_1 -= 3.14159;
+    }
+    float relative_angle_2 = angle_grad - orth_angle_2;
+    if (relative_angle_2 > 3.14159) {
+        relative_angle_2 -= 3.14159;
+    }
+
+    float angle_sum = relative_angle_1 + relative_angle_2;
+    return exp(-1.0 * (angle_sum * angle_sum) / (correlation_width*correlation_width));
 }
-*/
+
+void main(void)
+{
+    float x = gl_FragCoord.x;
+    float y = gl_FragCoord.y;
+
+    float pos_x = x / resolution.x * period;
+    float pos_y = y / resolution.y * period;
+
+    float dr = period / resolution.x;
+
+    float corr = get_correlation_at(pos_x, pos_y, dr);
+    gl_FragColor = vec4(0.0, 0.0, 0.0, corr);
+}
+'''
+
+gradient_shader_bottom = '''
+    return value;
+}
+
+vec2 grad(float pos_x, float pos_y, float dr) {
+    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    return vec2(dfdx, dfdy);
+}
+
+float gradient(float pos_x, float pos_y, float dr)
+{
+    vec2 current_gradient = grad(pos_x, pos_y, dr);
+
+    return atan(current_gradient.y, current_gradient.x) + 3.14159265;
+}
+
+void main(void)
+{
+    float x = gl_FragCoord.x;
+    float y = gl_FragCoord.y;
+
+    float pos_x = x / resolution.x * period;
+    float pos_y = y / resolution.y * period;
+
+    float dr = period / resolution.x;
+
+    vec3 gradient_col;
+    gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr) / (2.0*3.1416), 1.0, 1.0));
+    
+    gl_FragColor = vec4(gradient_col.x,
+                        gradient_col.y,
+                        gradient_col.z,
+                        1.0);
+}
+'''
+
+intensity_shader_bottom = '''
+    return value;
+}
 
 void main(void)
 {
@@ -120,21 +212,12 @@ void main(void)
     float value = superposition_function(pos_x, pos_y);
 
     vec3 intensity_col;
-    vec3 gradient_col;
-    vec3 correlation_col;
     intensity_col = intensity_to_colour(value / max_intensity);
-    gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr) / (2.0*3.1416), 1.0, 1.0));
     
-    /*
-    float corr = get_correlation_at(pos_x, pos_y, dr);
-    float correlation_col = vec3(1.0-corr, 1.0-corr, 1.0-corr);
-*/
-
-    gl_FragColor = vec4(gradient_col.x*gradient_opacity + intensity_col.x*(1.0-gradient_opacity),
-                        gradient_col.y*gradient_opacity + intensity_col.y*(1.0-gradient_opacity),
-                        gradient_col.z*gradient_opacity + intensity_col.z*(1.0-gradient_opacity),
+    gl_FragColor = vec4(intensity_col.x,
+                        intensity_col.y,
+                        intensity_col.z,
                         1.0);
-
     
 }
 '''
@@ -147,13 +230,13 @@ gl_FragColor = vec4(0.5, 0.2, 0.2, 1.0);
 '''
 
 with open('plasma.glsl') as fileh:
-    plasma_shader = header + shader_uniforms + fileh.read()
+    plasma_shader = header + universal_shader_uniforms + fileh.read()
 
 with open('gradient.glsl') as fileh:
     gradient_shader = header + simple_shader_uniforms + fileh.read()
 
 with open('tunnel_fly.glsl') as fileh:
-    tunnel_fly_shader = header + shader_uniforms + fileh.read()
+    tunnel_fly_shader = header + universal_shader_uniforms + fileh.read()
 
 def duofactors(k):
     outs = []
@@ -189,9 +272,11 @@ def get_periodic_wavevectors(number=50, scale=5, seed=0):
 class AdvancedShader(ShaderWidget):
 
     shader_mid = StringProperty('')
-    shader_uniforms = StringProperty('')
+    shader_parameters = StringProperty('')
     fbo_texture = ObjectProperty(None, allownone=True)
 
+    def __init__(self, *args, **kwargs):
+        super(AdvancedShader, self).__init__(*args, **kwargs)
 
     def on_fs(self, *args):
         super(AdvancedShader, self).on_fs(*args)
@@ -209,10 +294,30 @@ class AdvancedShader(ShaderWidget):
         self.fbo['resolution'] = map(float, self.fbo_size)
 
     def replace_shader(self, *args):
-        new_fs = (header + shader_uniforms + self.shader_parameters +
+        new_fs = (header + universal_shader_uniforms + self.shader_parameters +
                   shader_top + self.shader_mid + shader_bottom)
         print 'new_fs is', new_fs
         self.fs = new_fs
+
+class SecondaryShader(AdvancedShader):
+    input_texture = ObjectProperty()
+
+    def __init__(self, *args, **kwargs):
+        super(SecondaryShader, self).__init__(*args, **kwargs)
+        with self.fbo.before:
+            self.input_binding = BindTexture(texture=self.input_texture,
+                                             index=1)
+        self.fbo['input_texture'] = 1
+        self.fs = inversion_shader
+        self.update_binding()
+        Clock.schedule_interval(self.force_update, 1/60.)
+    def update_binding(self, *args):
+        self.input_binding.texture = self.input_texture
+    def on_input_texture(self, *args):
+        self.update_binding()
+    def force_update(self, *args):
+        self.input_binding.force_update()
+
 
 class NeumannShader(AdvancedShader):
     wavevectors = ListProperty([])
@@ -227,7 +332,7 @@ class NeumannShader(AdvancedShader):
     animation = ObjectProperty(None, allownone=True)
     def __init__(self, *args, **kwargs):
         super(NeumannShader, self).__init__(*args, **kwargs)
-        self.set_periodic_shader(scale=17, number=50)
+        self.set_periodic_shader(scale=17, number=25)
     def on_phase_increment(self, *args):
         self.fbo['phase_increment'] = float(self.phase_increment)
     def animate_phase_increment(self, time):
@@ -248,8 +353,10 @@ class NeumannShader(AdvancedShader):
         if self.animation is not None:
             self.animation.cancel(self)
             self.animation = None
-    def on_gradient_opacity(self, *args):
-        self.update_glsl()
+    def replace_shader(self, *args):
+        new_fs = (header + universal_shader_uniforms + neumann_shader_uniforms + self.shader_parameters +
+                  shader_top + self.shader_mid + intensity_shader_bottom)
+        self.fs = new_fs
 
     def set_periodic_shader(self, scale=5, number=10, downscale=2):
         try:
@@ -302,7 +409,6 @@ class NeumannShader(AdvancedShader):
 
     def update_glsl(self, *args):
         super(NeumannShader, self).update_glsl(*args)
-
         for number, param in zip(count(), self.wavevectors):
             wv, phase, amp = param
             current_wv = 'k{}'.format(number)
@@ -314,12 +420,37 @@ class NeumannShader(AdvancedShader):
             number += 1
         self.fbo['period'] = float(self.period)
         self.fbo['max_intensity'] = float(2*sqrt(max(1.0, float(len(self.wavevectors)))))
-        self.fbo['gradient_opacity'] = self.gradient_opacity
         self.fbo['phase_increment'] = float(self.phase_increment)
-        self.fbo['nearbys'] = float(1.0)
 
     def view_wavevectors(self, *args):
         WvPopup(content=WvPopupContent(wavevectors=self.wavevectors)).open()
+
+class GradientShader(NeumannShader):
+    def __init__(self, *args, **kwargs):
+        super(GradientShader, self).__init__(*args, **kwargs)
+    def replace_shader(self, *args):
+        new_fs = (header + universal_shader_uniforms + neumann_shader_uniforms + self.shader_parameters +
+                  shader_top + self.shader_mid + gradient_shader_bottom)
+        self.fs = new_fs
+
+class CorrelationShader(NeumannShader):
+    orth_jump = NumericProperty(0.01)
+    correlation_width = NumericProperty(0.05)
+    def __init__(self, *args, **kwargs):
+        super(CorrelationShader, self).__init__(*args, **kwargs)
+    def on_correlation_width(self, *args):
+        self.fbo['correlation_width'] = float(self.correlation_width)
+    def on_orth_jump(self, *args):
+        self.fbo['orth_jump'] = float(self.orth_jump)
+    def replace_shader(self, *args):
+        new_fs = (header + universal_shader_uniforms + correlation_shader_uniforms +
+                  neumann_shader_uniforms + self.shader_parameters +
+                  shader_top + self.shader_mid + correlation_shader_bottom)
+        self.fs = new_fs
+    def update_glsl(self, *args):
+        super(CorrelationShader, self).update_glsl(*args)
+        self.fbo['orth_jump'] = float(self.orth_jump)
+        self.fbo['correlation_width'] = float(self.correlation_width)
 
 class WvPopup(Popup):
     wavevectors = ListProperty([])

@@ -3,16 +3,59 @@
 #:import tunnel_fly_shader main.tunnel_fly_shader
 #:import main main
 
+<SecondaryShader>:
+
+<GradientShader>:
+
 <Interface>:
     shader_display: shader
     resolution_slider: size_slider
     orientation: 'vertical'
-    BoxLayout:
+    FloatLayout:
         NeumannShader:
             id: shader
             fbo_size: map(int, (size_slider.value, size_slider.value))
-            gradient_opacity: float(opacity_slider.value)
+            gradient_opacity: 0.0 #float(opacity_slider.value)
             phase_increment: float(phase_slider.value)
+            correlation_opacity: float(corr_opacity_slider.value)
+            pos_hint: {'x': 0.0, 'y': 0.0}
+        GradientShader:
+            wavevectors: shader.wavevectors
+            fbo_size: shader.fbo_size
+            period: shader.period
+            phase_increment: shader.phase_increment
+            opacity: float(opacity_slider.value)
+            pos_hint: {'x': 0.0, 'y': 0.0}
+        CorrelationShader:
+            wavevectors: shader.wavevectors
+            fbo_size: shader.fbo_size
+            period: shader.period
+            phase_increment: shader.phase_increment
+            correlation_width: corr_width_slider.value
+            orth_jump: orth_jump_slider.value
+            opacity: corr_opacity_slider.value
+            pos_hint: {'x': 0.0, 'y': 0.0}
+    BoxLayout:
+        size_hint_y: None
+        height: dp(40)
+        Slider:
+            orientation: 'horizontal'
+            id: corr_opacity_slider
+            min: 0.
+            max: 1.
+            value: 0.
+        Slider:
+            orientation: 'horizontal'
+            id: corr_width_slider
+            min: 0.
+            max: 0.5
+            value: 0.05
+        Slider:
+            orientation: 'horizontal'
+            id: orth_jump_slider
+            min: 0.
+            max: 0.5
+            value: 0.01
     BoxLayout:
         size_hint_y: None
         height: dp(40)
