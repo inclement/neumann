@@ -32,7 +32,8 @@
             period: shader.period
             phase_increment: shader.phase_increment
             correlation_width: corr_width_slider.value
-            orth_jump: orth_jump_slider.value
+            orth_jump: 0.01 #orth_jump_slider.value
+            correlation_cutoff: corr_cutoff_slider.value
             opacity: corr_opacity_slider.value
             pos_hint: {'x': 0.0, 'y': 0.0}
     BoxLayout:
@@ -48,14 +49,20 @@
             orientation: 'horizontal'
             id: corr_width_slider
             min: 0.
-            max: 0.5
+            max: 1.0
             value: 0.05
         Slider:
             orientation: 'horizontal'
-            id: orth_jump_slider
+            id: corr_cutoff_slider
             min: 0.
-            max: 0.5
-            value: 0.01
+            max: 1.0
+            value: 0.2
+        # Slider:
+        #     orientation: 'horizontal'
+        #     id: orth_jump_slider
+        #     min: 0.
+        #     max: 0.5
+        #     value: 0.01
     BoxLayout:
         size_hint_y: None
         height: dp(40)

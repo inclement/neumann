@@ -46,6 +46,7 @@ uniform vec2 resolution;
 correlation_shader_uniforms = '''
 uniform float correlation_width;
 uniform float orth_jump;
+uniform float correlation_cutoff;
 '''
 
 neumann_shader_uniforms = '''
@@ -154,7 +155,17 @@ void main(void)
     float dr = period / resolution.x;
 
     float corr = get_correlation_at(pos_x, pos_y, dr);
-    gl_FragColor = vec4(0.0, 0.0, 0.0, corr);
+    float corrcol = 1.0 - corr;
+    float cutoff_colour;
+
+    if (corrcol < correlation_cutoff) {
+        cutoff_colour = 0.0;
+    } else {
+        cutoff_colour = 1.0;
+    }
+
+    /*gl_FragColor = vec4(cutoff_colour, cutoff_colour, cutoff_colour, 1.0);*/
+    gl_FragColor = vec4(cutoff_colour, cutoff_colour, cutoff_colour, corr);
 }
 '''
 
@@ -434,14 +445,17 @@ class GradientShader(NeumannShader):
         self.fs = new_fs
 
 class CorrelationShader(NeumannShader):
-    orth_jump = NumericProperty(0.01)
-    correlation_width = NumericProperty(0.05)
+    orth_jump = NumericProperty(0.001)
+    correlation_width = NumericProperty(0.005)
+    correlation_cutoff = NumericProperty()
     def __init__(self, *args, **kwargs):
         super(CorrelationShader, self).__init__(*args, **kwargs)
     def on_correlation_width(self, *args):
         self.fbo['correlation_width'] = float(self.correlation_width)
     def on_orth_jump(self, *args):
         self.fbo['orth_jump'] = float(self.orth_jump)
+    def on_correlation_cutoff(self, *args):
+        self.fbo['correlation_cutoff'] = float(self.correlation_cutoff)
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + correlation_shader_uniforms +
                   neumann_shader_uniforms + self.shader_parameters +
@@ -451,6 +465,7 @@ class CorrelationShader(NeumannShader):
         super(CorrelationShader, self).update_glsl(*args)
         self.fbo['orth_jump'] = float(self.orth_jump)
         self.fbo['correlation_width'] = float(self.correlation_width)
+        self.fbo['correlation_cutoff'] = float(self.correlation_cutoff)
 
 class WvPopup(Popup):
     wavevectors = ListProperty([])
