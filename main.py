@@ -9,6 +9,7 @@ from kivy.properties import (StringProperty, ListProperty, NumericProperty,
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.graphics import BindTexture
@@ -42,6 +43,32 @@ uniform vec2 resolution;
 universal_shader_uniforms = '''
 uniform vec2 resolution;
 '''
+secondary_shader_uniforms = '''
+uniform sampler2D input_texture;
+uniform vec2 search_distance;
+'''
+
+critical_finder_shader = header + universal_shader_uniforms + secondary_shader_uniforms + '''
+vec2 grad(float pos_x, float pos_y, float dr) {
+    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    return vec2(dfdx, dfdy);
+}
+
+float gradient(float pos_x, float pos_y, float dr)
+{
+    vec2 current_gradient = grad(pos_x, pos_y, dr);
+
+    return atan(current_gradient.y, current_gradient.x) + 3.14159265;
+}
+void main (void) {
+    float x = gl_FragCoord.x;
+    float y = gl_FragCoord.y;
+    float pos_x = x / resolution.x;
+    float pos_y = y / resolution.y;
+    
+}
+'''
 
 correlation_shader_uniforms = '''
 uniform float correlation_width;
@@ -53,6 +80,10 @@ neumann_shader_uniforms = '''
 uniform float period;
 uniform float max_intensity;
 uniform float phase_increment;
+'''
+
+critical_shader_uniforms = '''
+uniform float critical_jump;
 '''
 
 inversion_shader = header + universal_shader_uniforms + '''
@@ -98,11 +129,6 @@ correlation_shader_bottom = '''
     return value;
 }
 
-vec2 grad(float pos_x, float pos_y, float dr) {
-    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
-    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
-    return vec2(dfdx, dfdy);
-}
 
 mat2 rotmat(float angle) {
     return mat2(cos(angle), -1.0*sin(angle), sin(angle), cos(angle));
@@ -110,6 +136,12 @@ mat2 rotmat(float angle) {
 
 float mag(vec2 vector) {
     return sqrt(vector.x*vector.x + vector.y*vector.y);
+}
+
+vec2 grad(float pos_x, float pos_y, float dr) {
+    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    return vec2(dfdx, dfdy);
 }
 
 float gradient(float pos_x, float pos_y, float dr)
@@ -164,8 +196,7 @@ void main(void)
         cutoff_colour = 1.0;
     }
 
-    /*gl_FragColor = vec4(cutoff_colour, cutoff_colour, cutoff_colour, 1.0);*/
-    gl_FragColor = vec4(cutoff_colour, cutoff_colour, cutoff_colour, corr);
+    gl_FragColor = vec4(cutoff_colour, cutoff_colour, cutoff_colour, 1.0 - cutoff_colour);
 }
 '''
 
@@ -203,6 +234,85 @@ void main(void)
                         gradient_col.y,
                         gradient_col.z,
                         1.0);
+}
+'''
+
+critical_shader_bottom = '''
+    return value;
+}
+
+vec2 grad(float pos_x, float pos_y, float dr) {
+    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    return vec2(dfdx, dfdy);
+}
+
+float gradient(float pos_x, float pos_y, float dr)
+{
+    vec2 current_gradient = grad(pos_x, pos_y, dr);
+
+    return atan(current_gradient.y, current_gradient.x) + 3.14159265;
+}
+
+void main(void)
+{
+    float x = gl_FragCoord.x;
+    float y = gl_FragCoord.y;
+
+    float pos_x = x / resolution.x * period;
+    float pos_y = y / resolution.y * period;
+
+    float dr = period / resolution.x;
+
+    float angle_right = gradient(pos_x + critical_jump, pos_y, dr);
+    float angle_down = gradient(pos_x, pos_y - critical_jump, dr);
+    float angle_left = gradient(pos_x - critical_jump, pos_y, dr);
+    float angle_up = gradient(pos_x, pos_y + critical_jump, dr);
+
+    float d1 = angle_down - angle_right;
+    float d2 = angle_left - angle_down;
+    float d3 = angle_up - angle_left;
+    float d4 = angle_right - angle_up;
+
+    float pi = 3.14159;
+
+    if (d1 > pi) {
+        d1 -= pi;
+    }
+    if (d1 < -1.0 * pi) {
+        d1 += pi;
+    }
+    if (d2 > pi) {
+        d2 -= pi;
+    }
+    if (d2 < -1.0 * pi) {
+        d2 += pi;
+    }
+    if (d3 > pi) {
+        d3 -= pi;
+    }
+    if (d3 < -1.0 * pi) {
+        d3 += pi;
+    }
+    if (d4 > pi) {
+        d4 -= pi;
+    }
+    if (d4 < -1.0 * pi) {
+        d4 += pi;
+    }
+
+    vec4 output_colour; 
+    if (all(bvec4(d1 > 0.0, d2 > 0.0, d3 > 0.0, d4 > 0.0))) {
+        output_colour = vec4(1.0, 1.0, 0.0, 1.0);
+    } else {
+        if (all(bvec4(d1 < 0.0, d2 < 0.0, d3 < 0.0, d4 < 0.0))) {
+            output_colour = vec4(0.0, 1.0, 1.0, 1.0);
+        } else {
+            output_colour = vec4(1.0, 0.0, 1.0, 1.0);
+        }
+    }
+    
+    gl_FragColor = output_colour;
 }
 '''
 
@@ -280,6 +390,9 @@ def get_periodic_wavevectors(number=50, scale=5, seed=0):
 
     return list(wvs), phases, amps
 
+class VSeparator(Widget):
+    pass
+
 class AdvancedShader(ShaderWidget):
 
     shader_mid = StringProperty('')
@@ -287,6 +400,7 @@ class AdvancedShader(ShaderWidget):
     fbo_texture = ObjectProperty(None, allownone=True)
 
     def __init__(self, *args, **kwargs):
+        self.register_event_type('on_update_glsl')
         super(AdvancedShader, self).__init__(*args, **kwargs)
 
     def on_fs(self, *args):
@@ -303,6 +417,10 @@ class AdvancedShader(ShaderWidget):
         super(AdvancedShader, self).update_glsl(*args)
 
         self.fbo['resolution'] = map(float, self.fbo_size)
+        self.dispatch('on_update_glsl')
+
+    def on_update_glsl(self, *args):
+        pass
 
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + self.shader_parameters +
@@ -311,24 +429,32 @@ class AdvancedShader(ShaderWidget):
         self.fs = new_fs
 
 class SecondaryShader(AdvancedShader):
-    input_texture = ObjectProperty()
-
+    input_texture = ObjectProperty(None, allownone=True)
+    parent_shader = ObjectProperty(None, allownone=True)
+    search_distance = NumericProperty(0.02)
     def __init__(self, *args, **kwargs):
         super(SecondaryShader, self).__init__(*args, **kwargs)
         with self.fbo.before:
             self.input_binding = BindTexture(texture=self.input_texture,
                                              index=1)
         self.fbo['input_texture'] = 1
-        self.fs = inversion_shader
         self.update_binding()
         Clock.schedule_interval(self.force_update, 1/60.)
+    def on_fbo_size(self, *args):
+        super(SecondaryShader, self).on_fbo_size(*args)
+        self.fbo['fbo_size'] = map(float, self.fbo_size)
+    def on_parent_shader(self, *args):
+        parent_shader = self.parent_shader
+        parent_shader.bind(on_update_glsl=self.force_update)
     def update_binding(self, *args):
         self.input_binding.texture = self.input_texture
     def on_input_texture(self, *args):
         self.update_binding()
     def force_update(self, *args):
         self.input_binding.force_update()
-
+    def update_glsl(self, *args):
+        super(SecondaryShader, self).update_glsl(*args)
+        self.fbo['fbo_size'] = map(float, self.fbo_size)
 
 class NeumannShader(AdvancedShader):
     wavevectors = ListProperty([])
@@ -443,6 +569,20 @@ class GradientShader(NeumannShader):
         new_fs = (header + universal_shader_uniforms + neumann_shader_uniforms + self.shader_parameters +
                   shader_top + self.shader_mid + gradient_shader_bottom)
         self.fs = new_fs
+
+class CriticalShader(GradientShader):
+    critical_jump = NumericProperty(0.1)
+    def __init__(self, *args, **kwargs):
+        super(GradientShader, self).__init__(*args, **kwargs)
+    def on_critical_jump(self, *args):
+        self.fbo['critical_jump'] = float(self.critical_jump)
+    def replace_shader(self, *args):
+        new_fs = (header + universal_shader_uniforms + neumann_shader_uniforms + critical_shader_uniforms + self.shader_parameters +
+                  shader_top + self.shader_mid + critical_shader_bottom)
+        self.fs = new_fs
+    def update_glsl(self, *args):
+        super(CriticalShader, self).update_glsl(*args)
+        self.fbo['critical_jump'] = float(self.critical_jump)
 
 class CorrelationShader(NeumannShader):
     orth_jump = NumericProperty(0.001)

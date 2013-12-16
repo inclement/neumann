@@ -1,7 +1,18 @@
 #:import plasma_shader main.plasma_shader
 #:import gradient_shader main.gradient_shader
 #:import tunnel_fly_shader main.tunnel_fly_shader
+#:import critical_finder_shader main.critical_finder_shader
 #:import main main
+
+<VSeparator>:
+    size_hint_y: None
+    height: dp(2)
+    canvas:
+        Color:
+            rgba: 0.2, 0.2, 0.2, 1.0
+        Line:
+            points: [self.x, self.y + 0.5*self.height, self.x + self.width, self.y + 0.5*self.height]
+            width: 1.1
 
 <SecondaryShader>:
 
@@ -20,6 +31,7 @@
             correlation_opacity: float(corr_opacity_slider.value)
             pos_hint: {'x': 0.0, 'y': 0.0}
         GradientShader:
+            id: gradientshader
             wavevectors: shader.wavevectors
             fbo_size: shader.fbo_size
             period: shader.period
@@ -36,6 +48,36 @@
             correlation_cutoff: corr_cutoff_slider.value
             opacity: corr_opacity_slider.value
             pos_hint: {'x': 0.0, 'y': 0.0}
+        CriticalShader:
+            id: criticalshader
+            wavevectors: shader.wavevectors
+            fbo_size: shader.fbo_size
+            period: shader.period
+            phase_increment: shader.phase_increment
+            opacity: float(critical_opacity_slider.value)
+            pos_hint: {'x': 0.0, 'y': 0.0}
+        # SecondaryShader:
+        #     input_texture: gradientshader.fbo_texture
+        #     parent_shader: shader
+        #     fs: critical_finder_shader
+        #     fbo_size: shader.fbo_size
+        #     pos_hint: {'x': 0.0, 'y': 0.0}
+    VSeparator:
+    BoxLayout:
+        size_hint_y: None
+        height: dp(30)
+        Label:
+            text: 'Correlation overlay ({:.2f})'.format(corr_opacity_slider.value)
+            text_size: self.size
+            halign: 'center'
+        Label:
+            text: 'Corr gaussian width ({:.2f})'.format(corr_width_slider.value)
+            text_size: self.size
+            halign: 'center'
+        Label:
+            text: 'Corr intensity cutoff ({:.2f})'.format(corr_cutoff_slider.value)
+            text_size: self.size
+            halign: 'center'
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -63,6 +105,7 @@
         #     min: 0.
         #     max: 0.5
         #     value: 0.01
+    VSeparator:
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -83,6 +126,28 @@
             size_hint_x: None
             width: sp(40)
             text: str(opacity_slider.value)[:4]
+    VSeparator:
+    BoxLayout:
+        size_hint_y: None
+        height: dp(40)
+        Widget:
+            size_hint_x: None
+            width: dp(5)
+        Label:
+            size_hint_x: None
+            width: self.texture_size[0] if self.texture_size[0] is not None else 10
+            text: 'Critical overlay:'
+        Slider:
+            orientation: 'horizontal'
+            id: critical_opacity_slider
+            min: 0.
+            max: 1.
+            value: 0.
+        Label:
+            size_hint_x: None
+            width: sp(40)
+            text: str(critical_opacity_slider.value)[:4]
+    VSeparator:
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -108,6 +173,7 @@
             width: sp(60)
             text: 'animate'
             on_press: shader.animate_phase_increment(5)
+    VSeparator:
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -128,6 +194,7 @@
             size_hint_x: None
             width: sp(40)
             text: str(int(size_slider.value))
+    VSeparator:
     BoxLayout:
         size_hint_y: None
         height: sp(40)
