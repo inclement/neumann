@@ -21,7 +21,7 @@ from itertools import count
 from functools import partial
 from math import sqrt, pi
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 header = '''
 #ifdef GL_ES
@@ -302,12 +302,18 @@ void main(void)
         d4 += twopi;
     }
 
+    float value = superposition_function(pos_x, pos_y);
+
     vec4 output_colour; 
     if (all(bvec4(d1 > 0.0, d2 > 0.0, d3 > 0.0, d4 > 0.0))) {
-        output_colour = vec4(1.0, 0.0, 0.0, 1.0);
+        output_colour = vec4(1.0, 0.7, 0.0, 1.0);
     } else {
         if (all(bvec4(d1 < 0.0, d2 < 0.0, d3 < 0.0, d4 < 0.0))) {
-            output_colour = vec4(0.0, 1.0, 0.0, 1.0);
+            if (value < 0.0) {
+                output_colour = vec4(0.0, 0.0, 0.8, 1.0);
+            } else {
+                output_colour = vec4(0.8, 0.0, 0.0, 1.0);
+            }
         } else {
             output_colour = vec4(0.0, 0.0, 0.0, 0.0);
 
