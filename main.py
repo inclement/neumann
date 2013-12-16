@@ -46,6 +46,7 @@ uniform vec2 resolution;
 secondary_shader_uniforms = '''
 uniform sampler2D input_texture;
 uniform float fbo_jump;
+uniform int while_cutoff;
 '''
 
 critical_finder_shader = header + universal_shader_uniforms + secondary_shader_uniforms + '''
@@ -363,7 +364,7 @@ void main(void)
     float cur_gradient;
     current_colour = texture2D(input_texture, vec2(frac_x, frac_y));
     int num_steps = 0;
-    while (all(bvec2(current_colour.w < 0.9, num_steps < 30))) {
+    while (all(bvec2(current_colour.w < 0.9, num_steps < while_cutoff))) {
         cur_gradient = gradient(cur_frac_x, cur_frac_y, dr);
         cur_frac_x += fbo_jump * cos(cur_gradient);
         cur_frac_y += fbo_jump * sin(cur_gradient);
@@ -374,9 +375,9 @@ void main(void)
     vec4 output_colour;
 
     if (current_colour.x > 0.5) {
-        output_colour = vec4(0.0, 1.0, 0.0, 1.0);
+        output_colour = vec4(0.5, 0.0, 0.5, current_colour.w);
     } else {
-        output_colour = vec4(0.5, 0.0, 0.5, 1.0);
+        output_colour = vec4(0.5, 0.0, 0.5, 0.0);
     }
     
     gl_FragColor = output_colour;
@@ -507,6 +508,7 @@ class SecondaryShader(AdvancedShader):
         self.fbo['input_texture'] = 1
         self.update_binding()
         Clock.schedule_interval(self.force_update, 1/60.)
+        Clock.schedule_interval(self.update_glsl, 1.)
     def on_fbo_size(self, *args):
         super(SecondaryShader, self).on_fbo_size(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
@@ -634,6 +636,7 @@ class LineDetectionShader(NeumannShader):
     input_texture = ObjectProperty(None, allownone=True)
     parent_shader = ObjectProperty(None, allownone=True)
     search_distance = NumericProperty(0.02)
+    while_cutoff = NumericProperty(1)
     def __init__(self, *args, **kwargs):
         super(LineDetectionShader, self).__init__(*args, **kwargs)
         with self.fbo.before:
@@ -642,6 +645,9 @@ class LineDetectionShader(NeumannShader):
         self.fbo['input_texture'] = 1
         self.update_binding()
         Clock.schedule_interval(self.force_update, 1/60.)
+    def on_while_cutoff(self, *args):
+        self.fbo['while_cutoff'] = int(self.while_cutoff)
+        print 'while cutoff changed to', self.while_cutoff
     def on_fbo_size(self, *args):
         super(LineDetectionShader, self).on_fbo_size(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
@@ -657,6 +663,8 @@ class LineDetectionShader(NeumannShader):
     def update_glsl(self, *args):
         super(LineDetectionShader, self).update_glsl(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
+        self.fbo['fbo_jump'] = float(1./self.fbo_size[0])
+        self.fbo['while_cutoff'] = int(self.while_cutoff)
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + secondary_shader_uniforms +
                   neumann_shader_uniforms + self.shader_parameters +

@@ -47,15 +47,6 @@
         #     correlation_cutoff: corr_cutoff_slider.value
         #     opacity: corr_opacity_slider.value
         #     pos_hint: {'x': 0.0, 'y': 0.0}
-        CriticalShader:
-            id: criticalshader
-            wavevectors: shader.wavevectors
-            fbo_size: (critical_fbo_size_slider.value, critical_fbo_size_slider.value)
-            period: shader.period
-            phase_increment: shader.phase_increment
-            opacity: float(critical_opacity_slider.value)
-            pos_hint: {'x': 0.0, 'y': 0.0}
-            critical_jump: critical_jump_slider.value
         LineDetectionShader:
             id: lineshader
             wavevectors: shader.wavevectors
@@ -66,6 +57,16 @@
             pos_hint: {'x': 0.0, 'y': 0.0}
             critical_jump: critical_jump_slider.value
             input_texture: criticalshader.fbo_texture
+            while_cutoff: int(while_cutoff_slider.value)
+        CriticalShader:
+            id: criticalshader
+            wavevectors: shader.wavevectors
+            fbo_size: (critical_fbo_size_slider.value, critical_fbo_size_slider.value)
+            period: shader.period
+            phase_increment: shader.phase_increment
+            opacity: float(critical_opacity_slider.value)
+            pos_hint: {'x': 0.0, 'y': 0.0}
+            critical_jump: critical_jump_slider.value
         # SecondaryShader:
         #     input_texture: gradientshader.fbo_texture
         #     parent_shader: shader
@@ -73,49 +74,6 @@
         #     fbo_size: shader.fbo_size
         #     pos_hint: {'x': 0.0, 'y': 0.0}
     VSeparator:
-    # BoxLayout:
-    #     size_hint_y: None
-    #     height: dp(30)
-    #     Label:
-    #         text: 'Correlation overlay ({:.2f})'.format(corr_opacity_slider.value)
-    #         text_size: self.size
-    #         halign: 'center'
-    #     Label:
-    #         text: 'Corr gaussian width ({:.2f})'.format(corr_width_slider.value)
-    #         text_size: self.size
-    #         halign: 'center'
-    #     Label:
-    #         text: 'Corr intensity cutoff ({:.2f})'.format(corr_cutoff_slider.value)
-    #         text_size: self.size
-    #         halign: 'center'
-    # BoxLayout:
-    #     size_hint_y: None
-    #     height: dp(40)
-    #     Slider:
-    #         orientation: 'horizontal'
-    #         id: corr_opacity_slider
-    #         min: 0.
-    #         max: 1.
-    #         value: 0.
-    #     Slider:
-    #         orientation: 'horizontal'
-    #         id: corr_width_slider
-    #         min: 0.
-    #         max: 1.0
-    #         value: 0.05
-    #     Slider:
-    #         orientation: 'horizontal'
-    #         id: corr_cutoff_slider
-    #         min: 0.
-    #         max: 1.0
-    #         value: 0.2
-    #     # Slider:
-    #     #     orientation: 'horizontal'
-    #     #     id: orth_jump_slider
-    #     #     min: 0.
-    #     #     max: 0.5
-    #     #     value: 0.01
-    # VSeparator:
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -139,17 +97,17 @@
         Label:
             size_hint_x: None
             width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'Crit fbo_size:'
+            text: 'while cutoff'
         Slider:
             orientation: 'horizontal'
-            id: critical_fbo_size_slider
-            min: 10 
-            max: size_slider.value
-            value: size_slider.value * 2./3.
+            id: while_cutoff_slider
+            min: 2
+            max: 100
+            value: 20
         Label:
             size_hint_x: None
             width: sp(40)
-            text: str(critical_fbo_size_slider.value)[:4]
+            text: str(while_cutoff_slider.value)[:4]
     VSeparator:
     BoxLayout:
         size_hint_y: None
@@ -233,6 +191,20 @@
             size_hint_x: None
             width: sp(40)
             text: str(int(size_slider.value))
+        Label:
+            size_hint_x: None
+            width: self.texture_size[0] if self.texture_size[0] is not None else 10
+            text: 'Crit fbo_size:'
+        Slider:
+            orientation: 'horizontal'
+            id: critical_fbo_size_slider
+            min: 10 
+            max: size_slider.value
+            value: size_slider.value * 2./3.
+        Label:
+            size_hint_x: None
+            width: sp(40)
+            text: str(critical_fbo_size_slider.value)[:4]
     VSeparator:
     BoxLayout:
         size_hint_y: None
