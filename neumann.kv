@@ -56,6 +56,16 @@
             opacity: float(critical_opacity_slider.value)
             pos_hint: {'x': 0.0, 'y': 0.0}
             critical_jump: critical_jump_slider.value
+        LineDetectionShader:
+            id: lineshader
+            wavevectors: shader.wavevectors
+            fbo_size: (critical_fbo_size_slider.value, critical_fbo_size_slider.value)
+            period: shader.period
+            phase_increment: shader.phase_increment
+            opacity: float(critical_opacity_slider.value)
+            pos_hint: {'x': 0.0, 'y': 0.0}
+            critical_jump: critical_jump_slider.value
+            input_texture: criticalshader.fbo_texture
         # SecondaryShader:
         #     input_texture: gradientshader.fbo_texture
         #     parent_shader: shader

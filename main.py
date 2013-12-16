@@ -45,7 +45,7 @@ uniform vec2 resolution;
 '''
 secondary_shader_uniforms = '''
 uniform sampler2D input_texture;
-uniform vec2 search_distance;
+uniform float fbo_jump;
 '''
 
 critical_finder_shader = header + universal_shader_uniforms + secondary_shader_uniforms + '''
@@ -324,6 +324,65 @@ void main(void)
 }
 '''
 
+line_shader_bottom = '''
+    return value;
+}
+
+vec2 grad(float pos_x, float pos_y, float dr) {
+    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    return vec2(dfdx, dfdy);
+}
+
+float gradient(float pos_x, float pos_y, float dr)
+{
+    vec2 current_gradient = grad(pos_x, pos_y, dr);
+
+    return atan(current_gradient.y, current_gradient.x) + 3.14159265;
+}
+
+void main(void)
+{
+    float x = gl_FragCoord.x;
+    float y = gl_FragCoord.y;
+
+    float pos_x = x / resolution.x * period;
+    float pos_y = y / resolution.y * period;
+
+    float frac_x = x / resolution.x;
+    float frac_y = y / resolution.y;
+
+    float value = superposition_function(pos_x, pos_y);
+    float dr = period / resolution.x;
+
+    vec4 cin = texture2D(input_texture, vec2(frac_x, frac_y));
+
+    vec4 current_colour;
+    float cur_frac_x = frac_x;
+    float cur_frac_y = frac_y;
+    float cur_gradient;
+    current_colour = texture2D(input_texture, vec2(frac_x, frac_y));
+    int num_steps = 0;
+    while (all(bvec2(current_colour.w < 0.9, num_steps < 30))) {
+        cur_gradient = gradient(cur_frac_x, cur_frac_y, dr);
+        cur_frac_x += fbo_jump * cos(cur_gradient);
+        cur_frac_y += fbo_jump * sin(cur_gradient);
+        current_colour = texture2D(input_texture, vec2(cur_frac_x, cur_frac_y));
+        num_steps += 1;
+    }
+
+    vec4 output_colour;
+
+    if (current_colour.x > 0.5) {
+        output_colour = vec4(0.0, 1.0, 0.0, 1.0);
+    } else {
+        output_colour = vec4(0.5, 0.0, 0.5, 1.0);
+    }
+    
+    gl_FragColor = output_colour;
+}
+'''
+
 intensity_shader_bottom = '''
     return value;
 }
@@ -463,6 +522,7 @@ class SecondaryShader(AdvancedShader):
     def update_glsl(self, *args):
         super(SecondaryShader, self).update_glsl(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
+        self.fbo['fbo_jump'] = float(1./self.fbo_size[0])
 
 class NeumannShader(AdvancedShader):
     wavevectors = ListProperty([])
@@ -569,6 +629,42 @@ class NeumannShader(AdvancedShader):
 
     def view_wavevectors(self, *args):
         WvPopup(content=WvPopupContent(wavevectors=self.wavevectors)).open()
+
+class LineDetectionShader(NeumannShader):
+    input_texture = ObjectProperty(None, allownone=True)
+    parent_shader = ObjectProperty(None, allownone=True)
+    search_distance = NumericProperty(0.02)
+    def __init__(self, *args, **kwargs):
+        super(LineDetectionShader, self).__init__(*args, **kwargs)
+        with self.fbo.before:
+            self.input_binding = BindTexture(texture=self.input_texture,
+                                             index=1)
+        self.fbo['input_texture'] = 1
+        self.update_binding()
+        Clock.schedule_interval(self.force_update, 1/60.)
+    def on_fbo_size(self, *args):
+        super(LineDetectionShader, self).on_fbo_size(*args)
+        self.fbo['fbo_size'] = map(float, self.fbo_size)
+    def on_parent_shader(self, *args):
+        parent_shader = self.parent_shader
+        parent_shader.bind(on_update_glsl=self.force_update)
+    def update_binding(self, *args):
+        self.input_binding.texture = self.input_texture
+    def on_input_texture(self, *args):
+        self.update_binding()
+    def force_update(self, *args):
+        self.input_binding.force_update()
+    def update_glsl(self, *args):
+        super(LineDetectionShader, self).update_glsl(*args)
+        self.fbo['fbo_size'] = map(float, self.fbo_size)
+    def replace_shader(self, *args):
+        new_fs = (header + universal_shader_uniforms + secondary_shader_uniforms +
+                  neumann_shader_uniforms + self.shader_parameters +
+                  shader_top + self.shader_mid + line_shader_bottom)
+        print 'new_fs is'
+        print new_fs
+        self.fs = new_fs
+
 
 class GradientShader(NeumannShader):
     def __init__(self, *args, **kwargs):
