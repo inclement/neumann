@@ -56,6 +56,7 @@
             phase_increment: shader.phase_increment
             opacity: float(critical_opacity_slider.value)
             pos_hint: {'x': 0.0, 'y': 0.0}
+            critical_jump: critical_jump_slider.value
         # SecondaryShader:
         #     input_texture: gradientshader.fbo_texture
         #     parent_shader: shader
@@ -126,6 +127,21 @@
             size_hint_x: None
             width: sp(40)
             text: str(opacity_slider.value)[:4]
+        Label:
+            size_hint_x: None
+            width: self.texture_size[0] if self.texture_size[0] is not None else 10
+            text: 'Jump:'
+        Slider:
+            orientation: 'horizontal'
+            id: critical_jump_slider
+            min: 0.
+            max: 1.
+            value: 0.1
+        Label:
+            size_hint_x: None
+            width: sp(40)
+            text: str(critical_jump_slider.value)[:4]
+
     VSeparator:
     BoxLayout:
         size_hint_y: None

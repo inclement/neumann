@@ -275,40 +275,42 @@ void main(void)
     float d4 = angle_right - angle_up;
 
     float pi = 3.14159;
+    float twopi = 2.0*pi;
 
     if (d1 > pi) {
-        d1 -= pi;
+        d1 -= twopi;
     }
     if (d1 < -1.0 * pi) {
-        d1 += pi;
+        d1 += twopi;
     }
     if (d2 > pi) {
-        d2 -= pi;
+        d2 -= twopi;
     }
     if (d2 < -1.0 * pi) {
-        d2 += pi;
+        d2 += twopi;
     }
     if (d3 > pi) {
-        d3 -= pi;
+        d3 -= twopi;
     }
     if (d3 < -1.0 * pi) {
-        d3 += pi;
+        d3 += twopi;
     }
     if (d4 > pi) {
-        d4 -= pi;
+        d4 -= twopi;
     }
     if (d4 < -1.0 * pi) {
-        d4 += pi;
+        d4 += twopi;
     }
 
     vec4 output_colour; 
     if (all(bvec4(d1 > 0.0, d2 > 0.0, d3 > 0.0, d4 > 0.0))) {
-        output_colour = vec4(1.0, 1.0, 0.0, 1.0);
+        output_colour = vec4(1.0, 0.0, 0.0, 1.0);
     } else {
         if (all(bvec4(d1 < 0.0, d2 < 0.0, d3 < 0.0, d4 < 0.0))) {
-            output_colour = vec4(0.0, 1.0, 1.0, 1.0);
+            output_colour = vec4(0.0, 1.0, 0.0, 1.0);
         } else {
-            output_colour = vec4(1.0, 0.0, 1.0, 1.0);
+            output_colour = vec4(0.0, 0.0, 0.0, 0.0);
+
         }
     }
     
