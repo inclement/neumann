@@ -364,20 +364,37 @@ void main(void)
     float cur_gradient;
     current_colour = texture2D(input_texture, vec2(frac_x, frac_y));
     int num_steps = 0;
+
     while (all(bvec2(current_colour.w < 0.9, num_steps < while_cutoff))) {
-        cur_gradient = gradient(cur_frac_x, cur_frac_y, dr);
-        cur_frac_x += fbo_jump * cos(cur_gradient);
-        cur_frac_y += fbo_jump * sin(cur_gradient);
+        cur_gradient = gradient(cur_frac_x * period, cur_frac_y * period, dr);
+        cur_frac_x += 1.0*fbo_jump * cos(cur_gradient);
+        cur_frac_y += 1.0*fbo_jump * sin(cur_gradient);
         current_colour = texture2D(input_texture, vec2(cur_frac_x, cur_frac_y));
         num_steps += 1;
     }
 
     vec4 output_colour;
 
-    if (current_colour.x > 0.5) {
-        output_colour = vec4(0.5, 0.0, 0.5, current_colour.w);
+    if (current_colour.x > 0.9) {
+        output_colour = vec4(0.5, 0.0, 0.5, 1.0);
     } else {
-        output_colour = vec4(0.5, 0.0, 0.5, 0.0);
+        cur_frac_x = frac_x;
+        cur_frac_y = frac_y;
+        current_colour = texture2D(input_texture, vec2(frac_x, frac_y));
+        num_steps = 0;
+        while (all(bvec2(current_colour.w < 0.9, num_steps < while_cutoff))) {
+            cur_gradient = gradient(cur_frac_x * period, cur_frac_y * period, dr);
+            cur_frac_x -= 1.0*fbo_jump * cos(cur_gradient);
+            cur_frac_y -= 1.0*fbo_jump * sin(cur_gradient);
+            current_colour = texture2D(input_texture, vec2(cur_frac_x, cur_frac_y));
+            num_steps += 1;
+        }
+
+        if (current_colour.x > 0.9) {
+            output_colour = vec4(0.5, 0.0, 0.5, 1.0);
+        } else {
+            output_colour = vec4(0.0, 0.0, 0.0, 0.0);
+        }
     }
     
     gl_FragColor = output_colour;
@@ -493,7 +510,6 @@ class AdvancedShader(ShaderWidget):
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + self.shader_parameters +
                   shader_top + self.shader_mid + shader_bottom)
-        print 'new_fs is', new_fs
         self.fs = new_fs
 
 class SecondaryShader(AdvancedShader):
@@ -647,10 +663,10 @@ class LineDetectionShader(NeumannShader):
         Clock.schedule_interval(self.force_update, 1/60.)
     def on_while_cutoff(self, *args):
         self.fbo['while_cutoff'] = int(self.while_cutoff)
-        print 'while cutoff changed to', self.while_cutoff
     def on_fbo_size(self, *args):
         super(LineDetectionShader, self).on_fbo_size(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
+        self.fbo['fbo_jump'] = float(1./self.fbo_size[0])
     def on_parent_shader(self, *args):
         parent_shader = self.parent_shader
         parent_shader.bind(on_update_glsl=self.force_update)
