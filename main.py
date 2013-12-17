@@ -49,10 +49,14 @@ uniform float fbo_jump;
 uniform int while_cutoff;
 '''
 
-critical_finder_shader = header + universal_shader_uniforms + secondary_shader_uniforms + '''
+critical_finder_shader = (header + universal_shader_uniforms +
+                          secondary_shader_uniforms) + \
+'''
 vec2 grad(float pos_x, float pos_y, float dr) {
-    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
-    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    float dfdx = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x, pos_y + dr)) / dr;
     return vec2(dfdx, dfdy);
 }
 
@@ -67,7 +71,6 @@ void main (void) {
     float y = gl_FragCoord.y;
     float pos_x = x / resolution.x;
     float pos_y = y / resolution.y;
-    
 }
 '''
 
@@ -98,7 +101,6 @@ void main(void) {
     vec4 cin = texture2D(input_texture, vec2(pos_x, pos_y));
     gl_FragColor = vec4(1.0-cin.x, 1.0-cin.y, 1.0-cin.z, 1.0);
 }
-    
 '''
 
 shader_top = '''
@@ -140,8 +142,10 @@ float mag(vec2 vector) {
 }
 
 vec2 grad(float pos_x, float pos_y, float dr) {
-    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
-    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    float dfdx = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x, pos_y + dr)) / dr;
     return vec2(dfdx, dfdy);
 }
 
@@ -157,8 +161,10 @@ float get_correlation_at(float pos_x, float pos_y, float dr) {
     vec2 orth_dir = rotmat(3.14159/2.0) * local_grad;
     orth_dir = orth_dir / mag(orth_dir);
 
-    vec2 orth_grad_1 = grad(pos_x - orth_dir.x * orth_jump, pos_y - orth_dir.y * orth_jump, dr);
-    vec2 orth_grad_2 = grad(pos_x + orth_dir.x * orth_jump, pos_y + orth_dir.y * orth_jump, dr);
+    vec2 orth_grad_1 = grad(pos_x - orth_dir.x * orth_jump,
+                            pos_y - orth_dir.y * orth_jump, dr);
+    vec2 orth_grad_2 = grad(pos_x + orth_dir.x * orth_jump,
+                            pos_y + orth_dir.y * orth_jump, dr);
 
     float orth_angle_1 = atan(orth_grad_1.y, orth_grad_1.x);
     float orth_angle_2 = atan(orth_grad_2.y, orth_grad_2.y);
@@ -174,7 +180,8 @@ float get_correlation_at(float pos_x, float pos_y, float dr) {
     }
 
     float angle_sum = relative_angle_1 + relative_angle_2;
-    return exp(-1.0 * (angle_sum * angle_sum) / (correlation_width*correlation_width));
+    return exp(-1.0 * (angle_sum * angle_sum) /
+               (correlation_width*correlation_width));
 }
 
 void main(void)
@@ -197,7 +204,8 @@ void main(void)
         cutoff_colour = 1.0;
     }
 
-    gl_FragColor = vec4(cutoff_colour, cutoff_colour, cutoff_colour, 1.0 - cutoff_colour);
+    gl_FragColor = vec4(cutoff_colour, cutoff_colour,
+                        cutoff_colour, 1.0 - cutoff_colour);
 }
 '''
 
@@ -206,8 +214,10 @@ gradient_shader_bottom = '''
 }
 
 vec2 grad(float pos_x, float pos_y, float dr) {
-    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
-    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    float dfdx = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x, pos_y + dr)) / dr;
     return vec2(dfdx, dfdy);
 }
 
@@ -229,8 +239,9 @@ void main(void)
     float dr = period / resolution.x;
 
     vec3 gradient_col;
-    gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr) / (2.0*3.1416), 1.0, 1.0));
-    
+    gradient_col = hsv2rgb( vec3(gradient(pos_x, pos_y, dr) /
+                            (2.0*3.1416), 1.0, 1.0));
+
     gl_FragColor = vec4(gradient_col.x,
                         gradient_col.y,
                         gradient_col.z,
@@ -243,8 +254,10 @@ critical_shader_bottom = '''
 }
 
 vec2 grad(float pos_x, float pos_y, float dr) {
-    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
-    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    float dfdx = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x, pos_y + dr)) / dr;
     return vec2(dfdx, dfdy);
 }
 
@@ -305,7 +318,7 @@ void main(void)
 
     float value = superposition_function(pos_x, pos_y);
 
-    vec4 output_colour; 
+    vec4 output_colour;
     if (all(bvec4(d1 > 0.0, d2 > 0.0, d3 > 0.0, d4 > 0.0))) {
         output_colour = vec4(1.0, 0.7, 0.0, 1.0);
     } else {
@@ -320,7 +333,7 @@ void main(void)
 
         }
     }
-    
+
     gl_FragColor = output_colour;
 }
 '''
@@ -330,8 +343,10 @@ line_shader_bottom = '''
 }
 
 vec2 grad(float pos_x, float pos_y, float dr) {
-    float dfdx = (superposition_function(pos_x, pos_y) - superposition_function(pos_x + dr, pos_y)) / dr;
-    float dfdy = (superposition_function(pos_x, pos_y) - superposition_function(pos_x, pos_y + dr)) / dr;
+    float dfdx = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x + dr, pos_y)) / dr;
+    float dfdy = (superposition_function(pos_x, pos_y) -
+                  superposition_function(pos_x, pos_y + dr)) / dr;
     return vec2(dfdx, dfdy);
 }
 
@@ -383,10 +398,12 @@ void main(void)
         current_colour = texture2D(input_texture, vec2(frac_x, frac_y));
         num_steps = 0;
         while (all(bvec2(current_colour.w < 0.9, num_steps < while_cutoff))) {
-            cur_gradient = gradient(cur_frac_x * period, cur_frac_y * period, dr);
+            cur_gradient = gradient(cur_frac_x * period,
+                                    cur_frac_y * period, dr);
             cur_frac_x -= 1.0*fbo_jump * cos(cur_gradient);
             cur_frac_y -= 1.0*fbo_jump * sin(cur_gradient);
-            current_colour = texture2D(input_texture, vec2(cur_frac_x, cur_frac_y));
+            current_colour = texture2D(input_texture,
+                                       vec2(cur_frac_x, cur_frac_y));
             num_steps += 1;
         }
 
@@ -396,7 +413,7 @@ void main(void)
             output_colour = vec4(0.0, 0.0, 0.0, 0.0);
         }
     }
-    
+
     gl_FragColor = output_colour;
 }
 '''
@@ -419,12 +436,12 @@ void main(void)
 
     vec3 intensity_col;
     intensity_col = intensity_to_colour(value / max_intensity);
-    
+
     gl_FragColor = vec4(intensity_col.x,
                         intensity_col.y,
                         intensity_col.z,
                         1.0);
-    
+
 }
 '''
 
@@ -475,8 +492,10 @@ def get_periodic_wavevectors(number=50, scale=5, seed=0):
 
     return list(wvs), phases, amps
 
+
 class VSeparator(Widget):
     pass
+
 
 class AdvancedShader(ShaderWidget):
 
@@ -512,6 +531,7 @@ class AdvancedShader(ShaderWidget):
                   shader_top + self.shader_mid + shader_bottom)
         self.fs = new_fs
 
+
 class SecondaryShader(AdvancedShader):
     input_texture = ObjectProperty(None, allownone=True)
     parent_shader = ObjectProperty(None, allownone=True)
@@ -525,22 +545,29 @@ class SecondaryShader(AdvancedShader):
         self.update_binding()
         Clock.schedule_interval(self.force_update, 1/60.)
         Clock.schedule_interval(self.update_glsl, 1.)
+
     def on_fbo_size(self, *args):
         super(SecondaryShader, self).on_fbo_size(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
+
     def on_parent_shader(self, *args):
         parent_shader = self.parent_shader
         parent_shader.bind(on_update_glsl=self.force_update)
+
     def update_binding(self, *args):
         self.input_binding.texture = self.input_texture
+
     def on_input_texture(self, *args):
         self.update_binding()
+
     def force_update(self, *args):
         self.input_binding.force_update()
+
     def update_glsl(self, *args):
         super(SecondaryShader, self).update_glsl(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
         self.fbo['fbo_jump'] = float(1./self.fbo_size[0])
+
 
 class NeumannShader(AdvancedShader):
     wavevectors = ListProperty([])
@@ -553,11 +580,14 @@ class NeumannShader(AdvancedShader):
     shader_parameters = StringProperty('')
     phase_increment = NumericProperty(0.0)
     animation = ObjectProperty(None, allownone=True)
+
     def __init__(self, *args, **kwargs):
         super(NeumannShader, self).__init__(*args, **kwargs)
         self.set_periodic_shader(scale=17, number=25)
+
     def on_phase_increment(self, *args):
         self.fbo['phase_increment'] = float(self.phase_increment)
+
     def animate_phase_increment(self, time):
         if self.animation is not None:
             self.stop_animation()
@@ -568,14 +598,17 @@ class NeumannShader(AdvancedShader):
         anim.bind(on_complete=partial(self.repeat_animation, time))
         self.animation = anim
         anim.start(self)
+
     def repeat_animation(self, time, *args):
         self.phase_increment = 0.
         self.animation = None
         self.animate_phase_increment(time)
+
     def stop_animation(self, *args):
         if self.animation is not None:
             self.animation.cancel(self)
             self.animation = None
+
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + neumann_shader_uniforms + self.shader_parameters +
                   shader_top + self.shader_mid + intensity_shader_bottom)
@@ -648,11 +681,13 @@ class NeumannShader(AdvancedShader):
     def view_wavevectors(self, *args):
         WvPopup(content=WvPopupContent(wavevectors=self.wavevectors)).open()
 
+
 class LineDetectionShader(NeumannShader):
     input_texture = ObjectProperty(None, allownone=True)
     parent_shader = ObjectProperty(None, allownone=True)
     search_distance = NumericProperty(0.02)
     while_cutoff = NumericProperty(1)
+
     def __init__(self, *args, **kwargs):
         super(LineDetectionShader, self).__init__(*args, **kwargs)
         with self.fbo.before:
@@ -661,26 +696,34 @@ class LineDetectionShader(NeumannShader):
         self.fbo['input_texture'] = 1
         self.update_binding()
         Clock.schedule_interval(self.force_update, 1/60.)
+
     def on_while_cutoff(self, *args):
         self.fbo['while_cutoff'] = int(self.while_cutoff)
+
     def on_fbo_size(self, *args):
         super(LineDetectionShader, self).on_fbo_size(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
         self.fbo['fbo_jump'] = float(1./self.fbo_size[0])
+
     def on_parent_shader(self, *args):
         parent_shader = self.parent_shader
         parent_shader.bind(on_update_glsl=self.force_update)
+
     def update_binding(self, *args):
         self.input_binding.texture = self.input_texture
+
     def on_input_texture(self, *args):
         self.update_binding()
+
     def force_update(self, *args):
         self.input_binding.force_update()
+
     def update_glsl(self, *args):
         super(LineDetectionShader, self).update_glsl(*args)
         self.fbo['fbo_size'] = map(float, self.fbo_size)
         self.fbo['fbo_jump'] = float(1./self.fbo_size[0])
         self.fbo['while_cutoff'] = int(self.while_cutoff)
+
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + secondary_shader_uniforms +
                   neumann_shader_uniforms + self.shader_parameters +
@@ -693,24 +736,31 @@ class LineDetectionShader(NeumannShader):
 class GradientShader(NeumannShader):
     def __init__(self, *args, **kwargs):
         super(GradientShader, self).__init__(*args, **kwargs)
+
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + neumann_shader_uniforms + self.shader_parameters +
                   shader_top + self.shader_mid + gradient_shader_bottom)
         self.fs = new_fs
 
+
 class CriticalShader(GradientShader):
     critical_jump = NumericProperty(0.1)
+
     def __init__(self, *args, **kwargs):
         super(GradientShader, self).__init__(*args, **kwargs)
+
     def on_critical_jump(self, *args):
         self.fbo['critical_jump'] = float(self.critical_jump)
+
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + neumann_shader_uniforms + critical_shader_uniforms + self.shader_parameters +
                   shader_top + self.shader_mid + critical_shader_bottom)
         self.fs = new_fs
+
     def update_glsl(self, *args):
         super(CriticalShader, self).update_glsl(*args)
         self.fbo['critical_jump'] = float(self.critical_jump)
+
 
 class CorrelationShader(NeumannShader):
     orth_jump = NumericProperty(0.001)
@@ -718,28 +768,36 @@ class CorrelationShader(NeumannShader):
     correlation_cutoff = NumericProperty()
     def __init__(self, *args, **kwargs):
         super(CorrelationShader, self).__init__(*args, **kwargs)
+
     def on_correlation_width(self, *args):
         self.fbo['correlation_width'] = float(self.correlation_width)
+
     def on_orth_jump(self, *args):
         self.fbo['orth_jump'] = float(self.orth_jump)
+
     def on_correlation_cutoff(self, *args):
         self.fbo['correlation_cutoff'] = float(self.correlation_cutoff)
+
     def replace_shader(self, *args):
         new_fs = (header + universal_shader_uniforms + correlation_shader_uniforms +
                   neumann_shader_uniforms + self.shader_parameters +
                   shader_top + self.shader_mid + correlation_shader_bottom)
         self.fs = new_fs
+
     def update_glsl(self, *args):
         super(CorrelationShader, self).update_glsl(*args)
         self.fbo['orth_jump'] = float(self.orth_jump)
         self.fbo['correlation_width'] = float(self.correlation_width)
         self.fbo['correlation_cutoff'] = float(self.correlation_cutoff)
 
+
 class WvPopup(Popup):
     wavevectors = ListProperty([])
 
+
 class WvPopupContent(BoxLayout):
     wavevectors = ListProperty([])
+
 
 class Interface(BoxLayout):
     shader_display = ObjectProperty()
@@ -747,9 +805,11 @@ class Interface(BoxLayout):
     def __init__(self, *args, **kwargs):
         super(Interface, self).__init__(*args, **kwargs)
 
+
 class NeumannApp(App):
     def build(self):
         return Interface()
+
     def on_pause(self):
         return True
 
