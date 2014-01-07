@@ -382,8 +382,8 @@ void main(void)
 
     while (all(bvec2(current_colour.w < 0.9, num_steps < while_cutoff))) {
         cur_gradient = gradient(cur_frac_x * period, cur_frac_y * period, dr);
-        cur_frac_x += 3.0*fbo_jump * cos(cur_gradient);
-        cur_frac_y += 3.0*fbo_jump * sin(cur_gradient);
+        cur_frac_x += 1.0*fbo_jump * cos(cur_gradient);
+        cur_frac_y += 1.0*fbo_jump * sin(cur_gradient);
         current_colour = texture2D(input_texture, vec2(cur_frac_x, cur_frac_y));
         num_steps += 1;
     }
@@ -561,7 +561,7 @@ class SecondaryShader(AdvancedShader):
         self.update_binding()
 
     def force_update(self, *args):
-        self.input_binding.force_update()
+        self.fbo.ask_update()
 
     def update_glsl(self, *args):
         super(SecondaryShader, self).update_glsl(*args)
@@ -716,7 +716,7 @@ class LineDetectionShader(NeumannShader):
         self.update_binding()
 
     def force_update(self, *args):
-        self.input_binding.force_update()
+        self.fbo.ask_update()
 
     def update_glsl(self, *args):
         super(LineDetectionShader, self).update_glsl(*args)
