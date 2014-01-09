@@ -5,7 +5,8 @@ gpu, via a kivy app.
 
 from kivy.app import App
 from kivy.properties import (StringProperty, ListProperty, NumericProperty,
-                             ObjectProperty, BooleanProperty, NumericProperty)
+                             ObjectProperty, BooleanProperty, NumericProperty,
+                             ReferenceListProperty)
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy.uix.scrollview import ScrollView
@@ -13,6 +14,7 @@ from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.graphics import BindTexture
+from kivy.vector import Vector
 
 from shaderwidget import ShaderWidget
 
@@ -21,7 +23,11 @@ from itertools import count
 from functools import partial
 from math import sqrt, pi
 
+# DO NOT REMOVE THIS COMMENT, it is used for kv file merging:
+# kv goes here
+
 __version__ = '0.3'
+
 
 header = '''
 #ifdef GL_ES
@@ -69,8 +75,8 @@ float gradient(float pos_x, float pos_y, float dr)
 void main (void) {
     float x = gl_FragCoord.x;
     float y = gl_FragCoord.y;
-    float pos_x = x / resolution.x;
-    float pos_y = y / resolution.y;
+    float pos_x = (bottom_left.x + (x / resolution.x) * (top_right.x - bottom_left.x)) * period;
+    float pos_y = (bottom_left.y + (y / resolution.y) * (top_right.y - bottom_left.y)) * period;
 }
 '''
 
@@ -84,6 +90,8 @@ neumann_shader_uniforms = '''
 uniform float period;
 uniform float max_intensity;
 uniform float phase_increment;
+uniform vec2 bottom_left;
+uniform vec2 top_right;
 '''
 
 critical_shader_uniforms = '''
@@ -189,8 +197,8 @@ void main(void)
     float x = gl_FragCoord.x;
     float y = gl_FragCoord.y;
 
-    float pos_x = x / resolution.x * period;
-    float pos_y = y / resolution.y * period;
+    float pos_x = (bottom_left.x + (x / resolution.x) * (top_right.x - bottom_left.x)) * period;
+    float pos_y = (bottom_left.y + (y / resolution.y) * (top_right.y - bottom_left.y)) * period;
 
     float dr = period / resolution.x;
 
@@ -233,8 +241,8 @@ void main(void)
     float x = gl_FragCoord.x;
     float y = gl_FragCoord.y;
 
-    float pos_x = x / resolution.x * period;
-    float pos_y = y / resolution.y * period;
+    float pos_x = (bottom_left.x + (x / resolution.x) * (top_right.x - bottom_left.x)) * period;
+    float pos_y = (bottom_left.y + (y / resolution.y) * (top_right.y - bottom_left.y)) * period;
 
     float dr = period / resolution.x;
 
@@ -273,8 +281,8 @@ void main(void)
     float x = gl_FragCoord.x;
     float y = gl_FragCoord.y;
 
-    float pos_x = x / resolution.x * period;
-    float pos_y = y / resolution.y * period;
+    float pos_x = (bottom_left.x + (x / resolution.x) * (top_right.x - bottom_left.x)) * period;
+    float pos_y = (bottom_left.y + (y / resolution.y) * (top_right.y - bottom_left.y)) * period;
 
     float dr = period / resolution.x;
 
@@ -362,11 +370,11 @@ void main(void)
     float x = gl_FragCoord.x;
     float y = gl_FragCoord.y;
 
-    float pos_x = x / resolution.x * period;
-    float pos_y = y / resolution.y * period;
+    float pos_x = (bottom_left.x + (x / resolution.x) * (top_right.x - bottom_left.x)) * period;
+    float pos_y = (bottom_left.y + (y / resolution.y) * (top_right.y - bottom_left.y)) * period;
 
-    float frac_x = x / resolution.x;
-    float frac_y = y / resolution.y;
+    float frac_x = bottom_left.x + (x / resolution.x) * (top_right.x - bottom_left.x);
+    float frac_y = bottom_left.y + (y / resolution.y) * (top_right.y - bottom_left.y);
 
     float value = superposition_function(pos_x, pos_y);
     float dr = period / resolution.x;
@@ -427,8 +435,8 @@ void main(void)
     float x = gl_FragCoord.x;
     float y = gl_FragCoord.y;
 
-    float pos_x = x / resolution.x * period;
-    float pos_y = y / resolution.y * period;
+    float pos_x = (bottom_left.x + (x / resolution.x) * (top_right.x - bottom_left.x)) * period;
+    float pos_y = (bottom_left.y + (y / resolution.y) * (top_right.y - bottom_left.y)) * period;
 
     float dr = period / resolution.x;
 
@@ -506,6 +514,7 @@ class AdvancedShader(ShaderWidget):
     def __init__(self, *args, **kwargs):
         self.register_event_type('on_update_glsl')
         super(AdvancedShader, self).__init__(*args, **kwargs)
+        Clock.schedule_once(self.update_glsl, 0)
 
     def on_fs(self, *args):
         super(AdvancedShader, self).on_fs(*args)
@@ -568,6 +577,41 @@ class SecondaryShader(AdvancedShader):
         self.fbo['fbo_size'] = map(float, self.fbo_size)
         self.fbo['fbo_jump'] = float(1./self.fbo_size[0])
 
+class AreaSelector(Widget):
+    touch_init = ListProperty([0, 0])
+    touch_end = ListProperty([0, 0])
+
+    bottom_left = ListProperty([0, 0])
+    top_right = ListProperty([0, 0])
+
+    touch = ObjectProperty(None, allownone=True)
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            if not self.touch:
+                self.touch = touch
+                self.touch_init = touch.pos
+            else:
+                self.on_touch_move(touch)
+
+    def on_touch_move(self, touch):
+        if self.collide_point(*touch.pos):
+            self.touch_end = touch.pos
+
+    def on_touch_up(self, touch):
+        if self.touch:
+            if touch is self.touch:
+                self.touch = None
+            self.update_proportional_distances()
+            self.touch_init = [0, 0]
+            self.touch_end = [0, 0]
+
+    def update_proportional_distances(self):
+        first_point = (Vector(self.touch_init) - Vector(self.pos)) / Vector(self.size)
+        second_point = (Vector(self.touch_end) - Vector(self.pos)) / Vector(self.size)
+        self.bottom_left = [min(first_point[0], second_point[0]), min(first_point[1], second_point[1])]
+        self.top_right = [max(first_point[0], second_point[0]), max(first_point[1], second_point[1])]
+        print 'selector', self.bottom_left, self.top_right
 
 class NeumannShader(AdvancedShader):
     wavevectors = ListProperty([])
@@ -579,11 +623,30 @@ class NeumannShader(AdvancedShader):
     gradient_opacity = NumericProperty(0.0)
     shader_parameters = StringProperty('')
     phase_increment = NumericProperty(0.0)
+    bottom_left_x = NumericProperty(0.0)
+    bottom_left_y = NumericProperty(0.0)
+    bottom_left = ReferenceListProperty(bottom_left_x, bottom_left_y)
+    top_right_x = NumericProperty(0.0)
+    top_right_y = NumericProperty(0.0)
+    top_right = ReferenceListProperty(top_right_x, top_right_y)
+        
     animation = ObjectProperty(None, allownone=True)
 
     def __init__(self, *args, **kwargs):
         super(NeumannShader, self).__init__(*args, **kwargs)
         self.set_periodic_shader(scale=17, number=25)
+
+    def reset_viewport(self, *args):
+        self.bottom_left = [0, 0]
+        self.top_right = [1, 1]
+
+    def on_bottom_left(self, *args):
+        self.fbo['bottom_left'] = map(float, self.bottom_left)
+        print 'bottom left changed', self.bottom_left
+
+    def on_top_right(self, *args):
+        self.fbo['top_right'] = map(float, self.top_right)
+        print 'top right changed', self.top_right
 
     def on_phase_increment(self, *args):
         self.fbo['phase_increment'] = float(self.phase_increment)
@@ -677,6 +740,8 @@ class NeumannShader(AdvancedShader):
         self.fbo['period'] = float(self.period)
         self.fbo['max_intensity'] = float(2*sqrt(max(1.0, float(len(self.wavevectors)))))
         self.fbo['phase_increment'] = float(self.phase_increment)
+        self.fbo['bottom_left'] = map(float, self.bottom_left)
+        self.fbo['top_right'] = map(float, self.top_right)
 
     def view_wavevectors(self, *args):
         WvPopup(content=WvPopupContent(wavevectors=self.wavevectors)).open()

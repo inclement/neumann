@@ -3,6 +3,15 @@
 #:import tunnel_fly_shader main.tunnel_fly_shader
 #:import critical_finder_shader main.critical_finder_shader
 #:import main main
+#:import Vector kivy.vector.Vector
+
+<AreaSelector>:
+    canvas:
+        Color:
+            rgba: 0.1, 0.9, 0.1, 1
+        Line:
+            rectangle: [self.touch_init[0], self.touch_init[1], self.touch_end[0]-self.touch_init[0], self.touch_end[1]-self.touch_init[1]]
+            width: 3
 
 <VSeparator>:
     size_hint_y: None
@@ -29,6 +38,8 @@
             gradient_opacity: 0.0 #float(opacity_slider.value)
             phase_increment: float(phase_slider.value)
             pos_hint: {'x': 0.0, 'y': 0.0}
+            bottom_left: areaselect.bottom_left
+            top_right: areaselect.top_right
         GradientShader:
             id: gradientshader
             wavevectors: shader.wavevectors
@@ -37,16 +48,8 @@
             phase_increment: shader.phase_increment
             opacity: float(opacity_slider.value)
             pos_hint: {'x': 0.0, 'y': 0.0}
-        # CorrelationShader:
-        #     wavevectors: shader.wavevectors
-        #     fbo_size: shader.fbo_size
-        #     period: shader.period
-        #     phase_increment: shader.phase_increment
-        #     correlation_width: corr_width_slider.value
-        #     orth_jump: 0.01 #orth_jump_slider.value
-        #     correlation_cutoff: corr_cutoff_slider.value
-        #     opacity: corr_opacity_slider.value
-        #     pos_hint: {'x': 0.0, 'y': 0.0}
+            bottom_left: shader.bottom_left
+            top_right: shader.top_right
         LineDetectionShader:
             id: lineshader
             wavevectors: shader.wavevectors
@@ -58,6 +61,8 @@
             critical_jump: critical_jump_slider.value
             input_texture: criticalshader.fbo_texture
             while_cutoff: int(while_cutoff_slider.value)
+            bottom_left: shader.bottom_left
+            top_right: shader.top_right
         CriticalShader:
             id: criticalshader
             wavevectors: shader.wavevectors
@@ -67,12 +72,11 @@
             opacity: float(critical_opacity_slider.value)
             pos_hint: {'x': 0.0, 'y': 0.0}
             critical_jump: critical_jump_slider.value
-        # SecondaryShader:
-        #     input_texture: gradientshader.fbo_texture
-        #     parent_shader: shader
-        #     fs: critical_finder_shader
-        #     fbo_size: shader.fbo_size
-        #     pos_hint: {'x': 0.0, 'y': 0.0}
+            bottom_left: shader.bottom_left
+            top_right: shader.top_right
+        AreaSelector:
+            id: areaselect
+            pos_hint: {'x': 0.0, 'y': 0.0}
     VSeparator:
     BoxLayout:
         size_hint_y: None
@@ -226,6 +230,9 @@
         Button:
             text: 'View wavevectors'
             on_press: shader.view_wavevectors()
+        Button:
+            text: '   reset\nviewport'
+            on_press: shader.reset_viewport()
 
 <NeumannShader>:
     fs: gradient_shader
