@@ -581,10 +581,29 @@ class AreaSelector(Widget):
     touch_init = ListProperty([0, 0])
     touch_end = ListProperty([0, 0])
 
-    bottom_left = ListProperty([0, 0])
-    top_right = ListProperty([0, 0])
+    bottom_left_x = NumericProperty(0.0)
+    bottom_left_y = NumericProperty(0.0)
+    top_right_x = NumericProperty(0.0)
+    top_right_y = NumericProperty(0.0)
+    bottom_left = ReferenceListProperty(bottom_left_x, bottom_left_y)
+    top_right = ReferenceListProperty(top_right_x, top_right_y)
 
     touch = ObjectProperty(None, allownone=True)
+
+    def __init__(self, **kwargs):
+        super(AreaSelector, self).__init__(**kwargs)
+        self.reset_viewport(False)
+
+    def reset_viewport(self, animate=True):
+        if not animate:
+            self.bottom_left = [0, 0]
+            self.top_right = [1, 1]
+            return
+        anim = Animation(bottom_left_x=0, bottom_left_y=0,
+                         top_right_x=1, top_right_y=1,
+                         duration=1.0)
+        anim.start(self)
+
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
@@ -609,8 +628,17 @@ class AreaSelector(Widget):
     def update_proportional_distances(self):
         first_point = (Vector(self.touch_init) - Vector(self.pos)) / Vector(self.size)
         second_point = (Vector(self.touch_end) - Vector(self.pos)) / Vector(self.size)
-        self.bottom_left = [min(first_point[0], second_point[0]), min(first_point[1], second_point[1])]
-        self.top_right = [max(first_point[0], second_point[0]), max(first_point[1], second_point[1])]
+
+        bottom_left = [min(first_point[0], second_point[0]), min(first_point[1], second_point[1])]
+        top_right = [max(first_point[0], second_point[0]), max(first_point[1], second_point[1])]
+
+        bottom_left2 = Vector(self.bottom_left) + Vector(bottom_left) * (Vector(self.top_right) - Vector(self.bottom_left))
+        top_right2 = Vector(self.bottom_left) + Vector(top_right) * (Vector(self.top_right) - Vector(self.bottom_left))
+
+        anim = Animation(bottom_left_x=bottom_left2[0], bottom_left_y=bottom_left2[1],
+                         top_right_x=top_right2[0], top_right_y=top_right2[1],
+                         t='out_quad', duration=1.)
+        anim.start(self)
         print 'selector', self.bottom_left, self.top_right
 
 class NeumannShader(AdvancedShader):
@@ -635,11 +663,7 @@ class NeumannShader(AdvancedShader):
     def __init__(self, *args, **kwargs):
         super(NeumannShader, self).__init__(*args, **kwargs)
         self.set_periodic_shader(scale=17, number=25)
-
-    def reset_viewport(self, *args):
-        self.bottom_left = [0, 0]
-        self.top_right = [1, 1]
-
+        
     def on_bottom_left(self, *args):
         self.fbo['bottom_left'] = map(float, self.bottom_left)
         print 'bottom left changed', self.bottom_left
