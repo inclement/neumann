@@ -763,6 +763,7 @@ class NeumannLine(object):
     def __len__(self,*args):
         return len(self.points)
 
+
 class NeumannTracer(object):
     '''Stores information about a function and appropriate x/y
     information to store information about it in an array.
