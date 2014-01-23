@@ -775,7 +775,9 @@ class NeumannTracer(object):
     * dy: Step length dy for each pixel
     * func: A function to look for critical points in
     * start_point: The (x, y) tuple to take as (0, 0) in the function.
-    * to_edges: May be False (ignore edges), 'periodic' (use periodic boundary conditions) or 'fourier' (periodic with a -1 factor if passing through the boundary).
+    * to_edges: May be False (ignore edges), 'periodic' (use periodic
+      boundary conditions) or 'fourier' (periodic with a -1 factor if
+      passing through the boundary).
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
@@ -820,7 +822,7 @@ class NeumannTracer(object):
 
     def func_at_coord(self, x, y):
         '''Return the value of self.func at abstract coordinates x, y
-        translated via dx and the correct start point.
+        which will be translated via dx and the correct start point.
 
         '''
         sx, sy = self.start_point
