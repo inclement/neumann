@@ -26,7 +26,7 @@ from math import sqrt, pi
 # DO NOT REMOVE THIS COMMENT, it is used for kv file merging:
 # kv goes here
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 
 header = '''

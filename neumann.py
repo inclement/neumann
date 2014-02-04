@@ -1483,16 +1483,16 @@ class NeumannTracer(object):
                         patch = Polygon(p, alpha=1.0,
                                         closed=True,
                                         color=colour,
-                                        linestyle=n.random.choice(
-                                            patch_linestyles),
+                                        # linestyle=n.random.choice(
+                                        #     patch_linestyles),
                                         linewidth=2,
                                         )
                     else:
                         patch = Polygon(p, alpha=0.7,
                                         closed=True,
                                         color=colour,
-                                        linestyle=n.random.choice(
-                                            patch_linestyles),
+                                        # linestyle=n.random.choice(
+                                        #     patch_linestyles),
                                         linewidth=2,
                                         )
                     ax.add_patch(patch)
