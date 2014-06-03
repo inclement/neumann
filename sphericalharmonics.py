@@ -145,24 +145,26 @@ class NeumannCubeHandler(object):
 
         else:  # not stereographic, plot full sphere
             for side, arr in enumerate(arrs):
-                arr[0, 0] = arr_max
-                arr[0, 1] = -1*arr_max
-                xs, ys, zs = side_to_xs_ys_zs(side, shape)
-                stxs, stys, stzs = vcube_to_sphere(xs, ys, zs)
-                may.mesh(stxs, stys, stzs, scalars=arr*-1, colormap='RdYlBu')
+        #        if side == 0:
+                    arr[0, 0] = arr_max
+                    arr[0, 1] = -1*arr_max
+                    xs, ys, zs = side_to_xs_ys_zs(side, shape)
+                    stxs, stys, stzs = vcube_to_sphere(xs, ys, zs)
+                    may.mesh(stxs, stys, stzs, scalars=arr*-1, colormap='RdYlBu')
 
             if plot_criticals:
                 crit_sets = [tracer.crits for tracer in self.tracers]
                 for side, crit_set in enumerate(crit_sets):
-                    maxima, minima, saddles, degenerate = crit_set
-                    print 'maxima are', maxima
-                    maxima = crits_to_sphere(side, shape, maxima)
-                    print 'maxima are', maxima
+        #            if side == 0:
+                        maxima, minima, saddles, degenerate = crit_set
+                        print 'maxima are', maxima
+                        maxima = crits_to_sphere(side, shape, maxima)
+                        print 'maxima are', maxima
 
-                    if len(maxima[0]) > 0:
-                        print 'plotting'
-                        may.points3d(maxima[0], maxima[1], maxima[2],
-                                     color=(1, 0, 0))
+                        if len(maxima[0]) > 0:
+                            print 'plotting'
+                            may.points3d(maxima[0], maxima[1], maxima[2],
+                                         color=(1, 0, 0))
             
 
     def plot_net(self, plot_criticals=True, trace_lines=False, cmap='RdYlBu',
@@ -281,7 +283,7 @@ def net_representation_shift(side, shape, line):
     return line
 
 def side_xy_to_xyz(side, x, y):
-    '''Takes a cube side, and x,y values, and returns the x,y,z angles.'''
+    '''Takes a cube side, and x,y values, and returns the x,y,z positions.'''
     if side == 0:
         return x, y, 0.5
     elif side == 1:

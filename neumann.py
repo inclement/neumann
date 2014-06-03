@@ -225,9 +225,6 @@ to get a list of Neumann domain areas in the function you passed over the
 range of the function.
 
 
-Pickled data
-------------
-
 
 
 Module documentation
@@ -1325,6 +1322,8 @@ class NeumannTracer(object):
         totdegrees = float(max2 + max3 + max4 + max5 + max6 + max7 + max8 +
                            min2 + min3 + min4 + min5 + min6 + min7 + min8)
 
+        if totdegrees == 0:
+            return n.array(zip(range(2, 10), n.ones(8)))
         frac2 = float(max2 + min2) / totdegrees
         frac3 = float(max3 + min3) / totdegrees
         frac4 = float(max4 + min4) / totdegrees
@@ -1433,7 +1432,8 @@ class NeumannTracer(object):
         print
         return grad_arr
 
-    def plot(self, trace_lines=True, plot_hessian=False,
+    def plot(self, show_critical_points=True,
+             trace_lines=True, plot_hessian=False,
              show_saddle_directions=False,
              show_domain_patches=False,
              print_patch_areas=False,
@@ -1456,7 +1456,7 @@ class NeumannTracer(object):
 
         if not self.arr_filled:
             self.fill_arr()
-        if not self.found_crits:
+        if not self.found_crits and show_critical_points:
             self.find_critical_points()
         if not self.traced_lines and trace_lines:
             self.trace_neumann_lines()
@@ -2373,7 +2373,7 @@ def save_domain_results_at(scales, domains=1000, downscale=3,
     results in a file starting with filen'''
     import cPickle
     import json
-    results = get_statistics_at(scales, domains, downscale)
+    results = get_domain_statistics_at(scales, domains, downscale)
     i = 1
 
     while os.path.exists('{}_{}.pickle'.format(filen, i)):
@@ -2387,6 +2387,12 @@ def save_domain_results_at(scales, domains=1000, downscale=3,
                          value[2], map(list, list(value[3])), value[4])
     with open('{}_{}.json'.format(filen, i), 'w') as fileh:
         json.dump(results2, fileh)
+    return results
+
+def load_domain_results(filen='neumann_results.pickle'):
+    import cPickle
+    with open(filen, 'rb') as fileh:
+        results = cPickle.load(fileh)
     return results
 
 def get_domain_statistics_at(scales, domains=1000, downscale=3):
