@@ -793,9 +793,8 @@ class NeumannTracer(object):
     * dy: Step length dy for each pixel
     * func: A function to look for critical points in
     * start_point: The (x, y) tuple to take as (0, 0) in the function.
-    * to_edges: May be False (ignore edges), 'periodic' (use periodic
-      boundary conditions) or 'fourier' (periodic with a -1 factor if
-      passing through the boundary).
+    * to_edges: May be False (ignore edges), or 'periodic' (use periodic
+      boundary conditions)
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
@@ -1929,19 +1928,10 @@ def get_critical_points(arr, to_edges=False):
             if to_edges == 'periodic':
                 ais[:, 0] = ais[:, 0] % lx
                 ais[:, 1] = ais[:, 1] % ly
-            elif to_edges == 'fourier':
-                off_x = n.logical_or(ais[:, 0]<0, ais[:, 0]>=lx)
-                off_y = n.logical_or(ais[:, 1]<0, ais[:, 1]>=ly)
-                off_edge = n.logical_or(off_x, off_y)
-                border_mult = ((-1.0*off_edge) + 0.5)*2.0
-                ais[:, 0] = ais[:, 0] % lx
-                ais[:, 1] = ais[:, 1] % ly
 
 
             for i in range(6):
                 adjs[i] = arr[ais[i][0] % lx, ais[i][1] % ly]
-            if to_edges == 'fourier':
-                adjs *= border_mult
 
             point_type = classify_point(adjs-val)
 
@@ -2029,6 +2019,7 @@ def sanitise_line(l):
         segs.append(l[curcut:])
     return segs
 
+
 def random_wave_function(number=50, wvmag=5, seed=0, returnall=False):
     seed = random.randint(0,10000000)
     generator = n.random.RandomState()
@@ -2071,25 +2062,34 @@ def range_factors(a, b=None, best=False):
         results = filter(lambda j: len(j[1]) == bestnum, results)
     return results
 
-def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
+sign_permutations = set(chain(permutations([1, 1]),
+                              permutations([1, -1]),
+                              permutations([-1, -1])))
+def periodic_random_wave_function(energy, seed=0, returnall=False):
     if seed == 0:
-        seed = random.randint(0, 1000000)
+        seed = n.random.randint(100000000000)
+
     generator = n.random.RandomState()
     generator.seed(seed)
 
-    possible_wvs = duofactors(scale)
-    possible_signs = map(n.array, [[1, 1], [1, -1], [-1, 1], [-1, -1]])
+    wvs = []
+    amps = []
+    phases = []
 
-    amps = generator.normal(size=number)
-    phases = 2*n.pi*generator.rand(number)
-    wvs = n.zeros((number, 2), dtype=n.float64)
-    for i in range(number):
-        wv = n.array(possible_wvs[generator.randint(len(possible_wvs))],
-                     dtype=n.float64)
-        generator.shuffle(wv)
-        wv *= possible_signs[generator.randint(len(possible_signs))]
-        wv *= 2*n.pi/n.sqrt(scale/2.)
-        wvs[i] = wv
+    possible_wvs = duofactors(energy)
+    if len(possible_wvs) == 0:
+        raise Exception('Energy must be a sum of two squares.')
+    for wv in possible_wvs:
+        for permutation in permutations(wv):
+            for signs in sign_permutations:
+                wvs.append(
+                    [p*q for (p, q) in zip(signs, permutation)])
+                amps.append(generator.normal(0., 1.))
+                phases.append(generator.rand() * 2 * n.pi)
+
+    wvs = n.array(wvs)
+    amps = n.array(amps)
+    phases = n.array(phases)
 
     def func(x, y):
         res = 0.0
@@ -2098,7 +2098,7 @@ def periodic_random_wave_function(number=50, scale=5, seed=0, returnall=False):
         exterior = amps*n.sin(interior)
         return n.sum(exterior)
     if returnall:
-        return func, (amps, wvs, phases)
+        return (func, (amps, wvs, phases))
     return func
 
 def mag(v):
@@ -2346,18 +2346,23 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2, func=None,
 
 
 
-def get_periodic_tracer(scale=5, number=50, downscale=2, returnall=False,
+def get_periodic_tracer(energy, gridsize=None, downscale=2,
+                        returnall=False,
                         seed=0):
     '''Returns a :class:`NeumannTracer` covering the periodic domain of a
-    torus with the given scale and number of wavevectors. downscale may be
-    increased to lower the resolution, the default should be fine in
-    general.'''
-    if not duofactors(scale):
+    torus with the given scale and number of wavevectors.
+
+    The sample grid size may be set manually with *gridsize*, or
+    otherwise chosen automatically and scaled by downscale.'''
+    if not duofactors(energy):
         raise ValueError('Input energy has no degenerate components.')
-    length = int(100/float(downscale) * float(scale)/5.)
+    if gridsize is None:
+        length = int(100/float(downscale) * float(n.sqrt(energy))/3.)
+    else:
+        length = gridsize
     print 'length is', length
-    periodicity = float(n.sqrt(scale/2.))
-    f, d2 = periodic_random_wave_function(number, scale, returnall=True,
+    periodicity = 2*n.pi
+    f, d2 = periodic_random_wave_function(energy, returnall=True,
                                           seed=seed)
     tracer = NeumannTracer(length, length,
                            periodicity/(1.*length), periodicity/(1.*length),
