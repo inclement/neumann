@@ -235,7 +235,7 @@ The individual classes and functions of neumann.py are documented below.
 '''
 
 import numpy as n
-from itertools import product
+from itertools import product, chain, permutations
 from colorsys import hsv_to_rgb
 
 from matplotlib import interactive as mpl_interactive
@@ -285,7 +285,6 @@ class UpsampleRegion(object):
         return False
 
 class CriticalGraph(dict):
-
     '''A dict subclass representing the graph of Neumann nodes (critical
     points) and their connections (Neumann gradient lines). Nodes are
     stored via their coordinates, with node information as [node type,
@@ -798,7 +797,7 @@ class NeumannTracer(object):
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
-                 start_point=(0.0, 0.0), to_edges=False, upsample_at=1000000):
+                 start_point=(0.00123, 0.00123), to_edges=False, upsample_at=1000000):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.xnum = xnum
@@ -833,9 +832,17 @@ class NeumannTracer(object):
         self.end_points = []
         self.extra_lines = []
 
+        self.crits = [[], [], [], []]
+
         self.fill_arr()
 
         self.figax = (None, None)
+
+    def contains(self, x, y):
+        '''Return True if the x, y point is within self (sx -> sx + xnum*dx etc.),
+        else False.'''
+        sx, sy = self.start_point
+        
 
     def func_at_coord(self, x, y):
         '''Return the value of self.func at abstract coordinates x, y
@@ -867,7 +874,7 @@ class NeumannTracer(object):
     def find_critical_points(self):
         '''
         Iterate over self.arr walking about each pixel and checking the
-        number of sign changes. Bin the result appropriately as a
+        number of sign changes. Bins the result appropriately as a
         maximum, minimum, saddle or regular point, and store in
         self.crits.
         '''
@@ -886,6 +893,22 @@ class NeumannTracer(object):
         self.crits_dict = critical_points_to_index_dict(self.crits)
 
         self.found_crits = True
+
+    def upsample_critical_points(self):
+        '''Go through all critical points that have been found, re-resolving
+        locally to better locate them.
+        '''
+
+        if not self.found_crits:
+            self.find_critical_points()
+
+        arr = self.arr
+        dx, dy = self.dr
+        
+        
+        
+
+        
 
     def get_critical_points(self):
         '''Find the critical points, and return (minima, maxima).'''
@@ -1021,6 +1044,8 @@ class NeumannTracer(object):
 
             adjs = adjs - val
 
+            # Find tracing start points
+            # Original algorithm just uses sign changes...is there a better way?
             tracing_start_points = []
             current_region_angles = []
             for i in range(6):
@@ -1479,9 +1504,11 @@ class NeumannTracer(object):
             fig, ax = figax
 
         if not show_domain_patches:
-            ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.6)
+            ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none',
+                      alpha=0.6)
         else:
-            ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.4)
+            ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none',
+                      alpha=0.4)
 
         if plot_gradients:
             grad_arr = self.get_gradients_array()
@@ -1527,18 +1554,19 @@ class NeumannTracer(object):
                     ax.text(pos[0], pos[1],'{:.1f}'.format(area))
 
         legend_entries = []
-        if len(maxima) > 0:
-            ax.scatter(maxima[:, 0], maxima[:, 1], 60, c='r')
-            legend_entries.append('maxima')
-        if len(minima) > 0:
-            ax.scatter(minima[:, 0], minima[:, 1], 60, c='b')
-            legend_entries.append('minima')
-        if len(saddles) > 0:
-            ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow')
-            legend_entries.append('saddles')
-        if len(degenerate) > 0:
-            ax.scatter(degenerate[:, 0], degenerate[:, 1], c='orange')
-            legend_entries.append('degenerate')
+        if show_critical_points:
+            if len(maxima) > 0:
+                ax.scatter(maxima[:, 0], maxima[:, 1], 60, c='r')
+                legend_entries.append('maxima')
+            if len(minima) > 0:
+                ax.scatter(minima[:, 0], minima[:, 1], 60, c='b')
+                legend_entries.append('minima')
+            if len(saddles) > 0:
+                ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow')
+                legend_entries.append('saddles')
+            if len(degenerate) > 0:
+                ax.scatter(degenerate[:, 0], degenerate[:, 1], c='orange')
+                legend_entries.append('degenerate')
 
         if show_domain_patches:
             ax.contour(plotarr, levels=[0], alpha=0.3, linestyles=['--'])
@@ -1823,16 +1851,14 @@ def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
         points.append([cx, cy])
 
         if cx < 0 or cx > xnum or cy < 0 or cy > ynum:
-            if to_edges in ['periodic','fourier']:
-                   # Need extra condition with fourier to get the signs right
+            if to_edges in ['periodic']:
                 cx %= xnum
                 cy %= ynum
             else:
                 return (points, None)
 
         nearx, neary = int(n.round(cx)), int(n.round(cy))
-        if to_edges in ['periodic','fourier']:
-                   # Need extra condition with fourier to get the signs right
+        if to_edges in ['periodic']:
             nearx %= xnum
             neary %= ynum
         if (nearx, neary) in critdict:
@@ -1896,9 +1922,6 @@ odd_adj_indices =  n.array([[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [0, -1]])
 all_adj_indices = n.array([[-1, -1], [-1, 0], [-1, 1], [0, 1],
                            [1, 1], [1, 0], [1, -1], [0, -1]])
 safe_adj_indices = n.array([[-1, 0], [0, 1], [1, 0], [0, -1]])
-#even_adj_indices = n.array([[-1, -1], [-1, 0], [-1, 1],
-#                   [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]])
-#odd_adj_indices = even_adj_indices
 def get_critical_points(arr, to_edges=False):
     lx, ly = arr.shape
     adjs = n.zeros(6, dtype=n.float64)
@@ -1944,7 +1967,11 @@ def get_critical_points(arr, to_edges=False):
             elif point_type == 'degenerate':
                 degenerate.append((x, y))
             elif point_type == 'fail':
+                print
                 print 'A failure occurred at', x, y
+                print ('=> odd number of sign changes, perhaps the function'
+                       'is symmetrical about this point.')
+
 
     lineprint()
 
@@ -1972,6 +1999,7 @@ def classify_point(ds):
     elif changes == 6:
         return 'degenerate'
     else:
+        print 'changes', changes
         return 'fail'
 
 def plot_arr_with_crits(arr, crits):
