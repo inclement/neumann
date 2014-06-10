@@ -783,7 +783,7 @@ class NeumannTracer(object):
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
                  start_point=(0.00123, 0.00123), to_edges=False,
-                 upsample=0):
+                 upsample=5):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.xnum = xnum
@@ -806,12 +806,15 @@ class NeumannTracer(object):
         self.hessian_filled = False
         self.graph_built = False
         self.found_domains = False
+        self.upsampled_crits = False
+
+        # Containers for upsampled point information
+        self.upsample_crits = [(), (), (), ()]
+        self.upsample_crits_dict = {}
 
         self.graph = CriticalGraph(xnum, ynum)
         self.domains = []
         self.igraph = None
-
-        self.upsample_regions = []
 
         self.lines = []
         self.start_points = []
@@ -874,26 +877,7 @@ class NeumannTracer(object):
         print 'Finding critical points...'
 
         maxima, minima, saddles, degenerate = get_critical_points(
-            self.arr,self.to_edges)
-
-        upsample = self.upsample
-        dx, dy = self.dr
-        if upsample > 0:
-            upsample_tracers = []
-            self.upsample_tracers = upsample_tracers
-            new_dx = 4*dx / (4*upsample)
-            new_dy = 4*dy / (4*upsample)
-            for maximum in maxima:
-                mx, my = maximum
-                rx = self.start_point[0] + mx*dx
-                ry = self.start_point[1] + my*dy
-                if not any([tracer.contains(rx, ry, 0.) for
-                            tracer in upsample_tracers]):
-                    new_tracer = NeumannTracer(
-                        4*upsample, 4*upsample, new_dx, new_dy, self.func,
-                        start_point=(self.sx + (mx - 2)*dx,
-                                     self.sy + (my - 2)*dy))
-                    upsample_tracers.append(new_tracer)
+            self.arr, self.to_edges)
             
         self.crits = (maxima, minima, saddles, degenerate)
         #self.prune_critical_points()
@@ -905,6 +889,77 @@ class NeumannTracer(object):
         self.crits_dict = critical_points_to_index_dict(self.crits)
 
         self.found_crits = True
+
+    def upsample_critical_points(self, span=10):
+        '''Go through all the critical points of self, upsampling them (or using an
+        existing upsampling region if possible).
+        '''
+        if not self.found_crits:
+            self.find_critical_points()
+
+        maxima, minima, saddles, degenerate = self.crits
+
+        upsample = self.upsample
+        if upsample <= 1:
+            return
+
+        dx, dy = self.dr
+        upsample_tracers = []
+        self.upsample_tracers = upsample_tracers
+
+        new_dx = dx / upsample
+        new_dy = dy / upsample
+
+        for i, crit in enumerate(maxima + minima + saddles):
+            lineprint('Upsampling critical point {} / {}'.format(
+                i, len(maxima) + len(minima) + len(saddles)))
+            mx, my = crit
+            rx = self.start_point[0] + mx*dx
+            ry = self.start_point[1] + my*dy
+            if not any([tracer.contains(rx, ry, max(tracer.dx, tracer.dy)) for
+                        tracer in upsample_tracers]):
+                new_tracer = NeumannTracer(
+                    span*upsample, span*upsample, new_dx, new_dy, self.func,
+                    start_point=(self.sx + (mx - span/2.00523)*dx,
+                                 self.sy + (my - span/2.00523)*dy))
+                new_tracer.find_critical_points()
+                upsample_tracers.append(new_tracer)
+
+        print               
+        print 'Replacing critical points...'
+        ups_max, ups_min, ups_sad, ups_deg = [], [], [], []
+        for i, tracer in enumerate(upsample_tracers):
+            new_max, new_min, new_sad, new_deg = tracer.crits
+            new_crits_dict = tracer.crits_dict
+            for crit, crit_type in new_crits_dict.items():
+                mx, my = crit
+                rx = tracer.start_point[0] + mx*tracer.dx
+                ry = tracer.start_point[1] + my*tracer.dy
+
+                if not any([
+                    earlier_tracer.contains(
+                        rx, ry, max(earlier_tracer.dr)) for
+                    earlier_tracer in upsample_tracers[:i]]):
+                    # The critical point isn't in the purview of another tracer,
+                    # so let's find where it is and store it
+
+                    coord_x = (rx - self.start_point[0]) / self.dx
+                    coord_y = (ry - self.start_point[1]) / self.dy
+
+                    if crit_type == 'maximum':
+                        ups_max.append((coord_x, coord_y))
+                    elif crit_type == 'minimum':
+                        ups_min.append((coord_x, coord_y))
+                    elif crit_type == 'saddle':
+                        ups_sad.append((coord_x, coord_y))
+                    elif crit_type == 'degenerate':
+                        ups_deg.append((coord_x, coord_y))
+
+        self.upsample_crits = [ups_max, ups_min, ups_sad, ups_deg]
+        self.upsample_crits_dict = critical_points_to_index_dict(
+            self.upsample_crits)
+        self.upsampled_crits = True
+            
 
     def get_critical_points(self):
         '''Find the critical points, and return (minima, maxima).'''
@@ -1495,6 +1550,18 @@ class NeumannTracer(object):
         saddles = n.array(saddles)
         degenerate = n.array(degenerate)
 
+        # Upsampled critical points (if they exist)
+        (upsampled_maxima, upsampled_minima, upsampled_saddles,
+         upsampled_degenerate) = self.upsample_crits
+        print 'start', self.upsample_crits
+        upsampled_maxima = n.array(upsampled_maxima)
+        upsampled_minima = n.array(upsampled_minima)
+        upsampled_saddles = n.array(upsampled_saddles)
+        upsampled_degenerate = n.array(upsampled_degenerate)
+
+        print 'maxima are', maxima
+        print 'upsampled maxima are', upsampled_maxima
+
         if figax is None:
             fig, ax = plt.subplots()
         else:
@@ -1551,19 +1618,47 @@ class NeumannTracer(object):
                     ax.text(pos[0], pos[1],'{:.1f}'.format(area))
 
         legend_entries = []
+        if self.upsample_crits_dict:
+            initial_crit_alpha=0.3
+        else:
+            initial_crit_alpha=1.0
         if show_critical_points:
             if len(maxima) > 0:
-                ax.scatter(maxima[:, 0], maxima[:, 1], 60, c='r')
+                ax.scatter(maxima[:, 0], maxima[:, 1], 60, c='r',
+                           alpha=initial_crit_alpha)
                 legend_entries.append('maxima')
             if len(minima) > 0:
-                ax.scatter(minima[:, 0], minima[:, 1], 60, c='b')
+                ax.scatter(minima[:, 0], minima[:, 1], 60, c='b',
+                           alpha=initial_crit_alpha)
                 legend_entries.append('minima')
             if len(saddles) > 0:
-                ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow')
+                ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow',
+                           alpha=initial_crit_alpha)
                 legend_entries.append('saddles')
             if len(degenerate) > 0:
-                ax.scatter(degenerate[:, 0], degenerate[:, 1], c='orange')
+                ax.scatter(degenerate[:, 0], degenerate[:, 1], c='orange',
+                           alpha=initial_crit_alpha)
                 legend_entries.append('degenerate')
+
+            # And the same for upsampled if they exist
+            if len(upsampled_maxima) > 0:
+                print upsampled_maxima[:, 0], upsampled_maxima[:, 1]
+                ax.scatter(upsampled_maxima[:, 0], upsampled_maxima[:, 1],
+                           60, c='r')
+                legend_entries.append('upsampled maxima')
+            if len(upsampled_minima) > 0:
+                ax.scatter(upsampled_minima[:, 0], upsampled_minima[:, 1],
+                           60, c='b')
+                legend_entries.append('upsampled minima')
+            if len(upsampled_saddles) > 0:
+                ax.scatter(upsampled_saddles[:, 0], upsampled_saddles[:, 1],
+                           60, color='yellow')
+                legend_entries.append('saddles')
+            if len(upsampled_degenerate) > 0:
+                ax.scatter(upsampled_degenerate[:, 0],upsampled_degenerate[:, 1],
+                           c='orange')
+                legend_entries.append('upsampled degenerate')
+                
 
         if show_domain_patches:
             ax.contour(plotarr, levels=[0], alpha=0.3, linestyles=['--'])
@@ -2372,7 +2467,7 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2, func=None,
 
 
 def get_periodic_tracer(energy, gridsize=None, downscale=2,
-                        returnall=False,
+                        returnall=False, upsample=5,
                         seed=0):
     '''Returns a :class:`NeumannTracer` covering the periodic domain of a
     torus with the given scale and number of wavevectors.
@@ -2392,7 +2487,7 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
     tracer = NeumannTracer(length, length,
                            periodicity/(1.*length), periodicity/(1.*length),
                            f,
-                           to_edges='periodic')
+                           to_edges='periodic', upsample=upsample)
     if returnall:
         return tracer, f, d2, length
     return tracer
