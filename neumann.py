@@ -268,21 +268,6 @@ def angle_between_vectors(a, b):
     product.'''
     return n.arccos(a.dot(b) / (mag(a)*mag(b)))
 
-class UpsampleRegion(object):
-    def __init__(self, sx, sy, lx, ly, degree=1):
-        self.sx = sx
-        self.sy = sy
-        self.start = n.array([x, y])
-        self.lx = lx
-        self.ly = ly
-        self.degree = degree
-    def shape_parameters(self):
-        return (self.sx, self.sy, self.lx, self.ly)
-    def contains(self, x, y):
-        sx, sy, lx, ly = self.shape_parameters()
-        if (sx < x < (sx + lx)) and (sy < y < (sy+ly)):
-            return True
-        return False
 
 class CriticalGraph(dict):
     '''A dict subclass representing the graph of Neumann nodes (critical
@@ -797,7 +782,8 @@ class NeumannTracer(object):
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
-                 start_point=(0.00123, 0.00123), to_edges=False, upsample_at=1000000):
+                 start_point=(0.00123, 0.00123), to_edges=False,
+                 upsample=0):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.xnum = xnum
@@ -810,7 +796,7 @@ class NeumannTracer(object):
         self.start_point = start_point
         self.sx = start_point[0]
         self.sy = start_point[1]
-        self.upsample_at = upsample_at
+        self.upsample = upsample
 
         self.to_edges = to_edges
 
@@ -838,11 +824,16 @@ class NeumannTracer(object):
 
         self.figax = (None, None)
 
-    def contains(self, x, y):
+    def contains(self, x, y, border=0.):
         '''Return True if the x, y point is within self (sx -> sx + xnum*dx etc.),
         else False.'''
         sx, sy = self.start_point
-        
+        dx, dy = self.dr
+        xnum, ynum = self.shape
+        if ((sx + border < x < sx + xnum*dx - border) and
+            (sy + border < y < sy + ynum*dy - border)):
+            return True
+        return False
 
     def func_at_coord(self, x, y):
         '''Return the value of self.func at abstract coordinates x, y
@@ -881,8 +872,29 @@ class NeumannTracer(object):
         if not self.arr_filled:
             self.fill_arr()
         print 'Finding critical points...'
-        maxima, minima, saddles, degenerate = get_critical_points(self.arr,
-                                                                  self.to_edges)
+
+        maxima, minima, saddles, degenerate = get_critical_points(
+            self.arr,self.to_edges)
+
+        upsample = self.upsample
+        dx, dy = self.dr
+        if upsample > 0:
+            upsample_tracers = []
+            self.upsample_tracers = upsample_tracers
+            new_dx = 4*dx / (4*upsample)
+            new_dy = 4*dy / (4*upsample)
+            for maximum in maxima:
+                mx, my = maximum
+                rx = self.start_point[0] + mx*dx
+                ry = self.start_point[1] + my*dy
+                if not any([tracer.contains(rx, ry, 0.) for
+                            tracer in upsample_tracers]):
+                    new_tracer = NeumannTracer(
+                        4*upsample, 4*upsample, new_dx, new_dy, self.func,
+                        start_point=(self.sx + (mx - 2)*dx,
+                                     self.sy + (my - 2)*dy))
+                    upsample_tracers.append(new_tracer)
+            
         self.crits = (maxima, minima, saddles, degenerate)
         #self.prune_critical_points()
         self.maxima = self.crits[0]
@@ -893,22 +905,6 @@ class NeumannTracer(object):
         self.crits_dict = critical_points_to_index_dict(self.crits)
 
         self.found_crits = True
-
-    def upsample_critical_points(self):
-        '''Go through all critical points that have been found, re-resolving
-        locally to better locate them.
-        '''
-
-        if not self.found_crits:
-            self.find_critical_points()
-
-        arr = self.arr
-        dx, dy = self.dr
-        
-        
-        
-
-        
 
     def get_critical_points(self):
         '''Find the critical points, and return (minima, maxima).'''
@@ -1465,7 +1461,8 @@ class NeumannTracer(object):
              show_sample_directions=False,
              plot_gradients=False,
              plot_nearby_gradients=False,
-             save=False, figax=None):
+             save=False, figax=None,
+             cmap='Spectral'):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -1504,10 +1501,10 @@ class NeumannTracer(object):
             fig, ax = figax
 
         if not show_domain_patches:
-            ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none',
+            ax.imshow(plotarr, cmap=cmap, interpolation='none',
                       alpha=0.6)
         else:
-            ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none',
+            ax.imshow(plotarr, cmap=cmap, interpolation='none',
                       alpha=0.4)
 
         if plot_gradients:
@@ -1670,7 +1667,7 @@ class NeumannTracer(object):
         degenerate = n.array(degenerate)
 
         # Show heightmap image
-        # ax.imshow(plotarr, cmap='RdYlBu_r', interpolation='none', alpha=0.6)
+        # ax.imshow(plotarr, cmap='Spectral_r', interpolation='none', alpha=0.6)
 
         # Set axis scales
         # Remove ticks
@@ -2011,7 +2008,7 @@ def plot_arr_with_crits(arr, crits):
 
     fig, ax = plt.subplots()
 
-    ax.imshow(arr, cmap='RdYlBu_r', interpolation='none', alpha=0.6)
+    ax.imshow(arr, cmap='Spectral_r', interpolation='none', alpha=0.6)
 
     legend_entries = []
 
