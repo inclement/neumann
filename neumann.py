@@ -249,15 +249,25 @@ import sys
 try:
     import mayavi.mlab as may
 except ImportError:
+    may = None
     print 'Failed to import mayavi. 3d plotting will not work.'
 
 try:
     import igraph as ig
 except ImportError:
-    print 'Failed to import igraph. Using igraph tools may crash the program'
+    ig = None
+    print 'Failed to import igraph. Using igraph tools may crash the program.'
 
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
+
+
+# Some default styles for plotting
+maxima_style_old = {'c': 'r'}
+minima_style_old = {'c': 'b'}
+saddle_style_old = {'color': 'yellow'}
+saddle_style_rami = {'color': 'purple', 'marker': 'd'}
+
 
 def rotation_matrix(angle):
     return n.array([[n.cos(angle), -n.sin(angle)],
@@ -1517,13 +1527,26 @@ class NeumannTracer(object):
              plot_gradients=False,
              plot_nearby_gradients=False,
              save=False, figax=None,
-             cmap='Spectral'):
+             maxima_style=maxima_style_old,  # Defined near top of file
+             minima_style=minima_style_old,
+             saddle_style = saddle_style_rami,
+             cmap='Spectral_r'):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
         - Hessian domains
         - Hessian eigenvectors at detected saddles
         - Coloured patches representing each closed Neumann domain
+
+        Options include:
+        - figsize: set the size of the output figure in inches
+        - show_sample_directions: plot (in red) markers showing the
+                                  directions in which Neumann lines were
+                                  dropped
+        - plot_gradients: plot (in hsv) the gradient at each point
+        - plot_nearby_gradients: same, but nearby?
+        - save: save at the given filename
+        - figax: plot to the given (fig, ax) tuple, if any
         '''
         if save:
             mpl_interactive(False)
@@ -1553,14 +1576,10 @@ class NeumannTracer(object):
         # Upsampled critical points (if they exist)
         (upsampled_maxima, upsampled_minima, upsampled_saddles,
          upsampled_degenerate) = self.upsample_crits
-        print 'start', self.upsample_crits
         upsampled_maxima = n.array(upsampled_maxima)
         upsampled_minima = n.array(upsampled_minima)
         upsampled_saddles = n.array(upsampled_saddles)
         upsampled_degenerate = n.array(upsampled_degenerate)
-
-        print 'maxima are', maxima
-        print 'upsampled maxima are', upsampled_maxima
 
         if figax is None:
             fig, ax = plt.subplots()
@@ -1624,16 +1643,19 @@ class NeumannTracer(object):
             initial_crit_alpha=1.0
         if show_critical_points:
             if len(maxima) > 0:
-                ax.scatter(maxima[:, 0], maxima[:, 1], 60, c='r',
-                           alpha=initial_crit_alpha)
+                ax.scatter(maxima[:, 0], maxima[:, 1], 60,
+                           alpha=initial_crit_alpha,
+                           **maxima_style)
                 legend_entries.append('maxima')
             if len(minima) > 0:
-                ax.scatter(minima[:, 0], minima[:, 1], 60, c='b',
-                           alpha=initial_crit_alpha)
+                ax.scatter(minima[:, 0], minima[:, 1], 60,
+                           alpha=initial_crit_alpha,
+                           **minima_style)
                 legend_entries.append('minima')
             if len(saddles) > 0:
-                ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow',
-                           alpha=initial_crit_alpha)
+                ax.scatter(saddles[:, 0], saddles[:, 1], 60, 
+                           alpha=initial_crit_alpha,
+                           **saddle_style)
                 legend_entries.append('saddles')
             if len(degenerate) > 0:
                 ax.scatter(degenerate[:, 0], degenerate[:, 1], c='orange',
@@ -2187,7 +2209,7 @@ sign_permutations = set(chain(permutations([1, 1]),
                               permutations([-1, -1])))
 def periodic_random_wave_function(energy, seed=0, returnall=False):
     if seed == 0:
-        seed = n.random.randint(100000000000)
+        seed = n.random.randint(100000000)
 
     generator = n.random.RandomState()
     generator.seed(seed)
