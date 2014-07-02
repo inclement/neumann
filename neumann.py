@@ -134,6 +134,10 @@ the basic plot (using the default arguments, so just `a.plot()`) or
 `a.plot(show_domain_patches=True, print_patch_areas=True)` which plots
 the different colours for each domain along with the areas.
 
+You can also now set some more options; :code:`maxima_style`,
+:code:`minima_style` and :code:`saddle_style`. These should be
+dictionaries that may contain any normal matplotlib code
+
 Histogram of :math:`\\rho`
 ------------------------
 
@@ -267,6 +271,7 @@ maxima_style_old = {'c': 'r'}
 minima_style_old = {'c': 'b'}
 saddle_style_old = {'color': 'yellow'}
 saddle_style_rami = {'color': 'purple', 'marker': 'd'}
+saddle_style_sandy = {'color': 'green', 'marker': 'd'}
 
 
 def rotation_matrix(angle):
@@ -789,11 +794,12 @@ class NeumannTracer(object):
     * start_point: The (x, y) tuple to take as (0, 0) in the function.
     * to_edges: May be False (ignore edges), or 'periodic' (use periodic
       boundary conditions)
+    * verbose: Whether to print information about ongoing calculations
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
                  start_point=(0.00123, 0.00123), to_edges=False,
-                 upsample=5):
+                 upsample=5, verbose=True):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.xnum = xnum
@@ -809,6 +815,8 @@ class NeumannTracer(object):
         self.upsample = upsample
 
         self.to_edges = to_edges
+
+        self.verbose = verbose
 
         self.arr_filled = False
         self.found_crits = False
@@ -837,6 +845,14 @@ class NeumannTracer(object):
 
         self.figax = (None, None)
 
+    def vprint(self, text='', newline=True, force=False):
+        '''Prints conditionally following self.verbose.'''
+        if self.verbose or force:
+            sys.stdout.write(text)
+            if newline:
+                sys.stdout.write('\n')
+            sys.stdout.flush()
+
     def contains(self, x, y, border=0.):
         '''Return True if the x, y point is within self (sx -> sx + xnum*dx etc.),
         else False.'''
@@ -863,16 +879,16 @@ class NeumannTracer(object):
 
         Result stored in self.arr.
         '''
-        print 'Populating function sample array...'
+        self.vprint('Populating function sample array...')
         arr = self.arr
         sx, sy = self.start_point
         dx, dy = self.dr
         xnum, ynum = self.shape
         for x in range(xnum):
-            lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+            self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
             for y in range(ynum):
                 arr[x, y] = self.func(sx + x*dx, sy + y*dy)
-        print
+        self.vprint()
         self.arr_filled = True
 
     def find_critical_points(self):
@@ -884,10 +900,10 @@ class NeumannTracer(object):
         '''
         if not self.arr_filled:
             self.fill_arr()
-        print 'Finding critical points...'
+        self.vprint('Finding critical points...')
 
         maxima, minima, saddles, degenerate = get_critical_points(
-            self.arr, self.to_edges)
+            self.arr, self.to_edges, self.verbose)
             
         self.crits = (maxima, minima, saddles, degenerate)
         #self.prune_critical_points()
@@ -921,7 +937,7 @@ class NeumannTracer(object):
         new_dy = dy / upsample
 
         for i, crit in enumerate(maxima + minima + saddles):
-            lineprint('Upsampling critical point {} / {}'.format(
+            self.vprint('Upsampling critical point {} / {}'.format(
                 i, len(maxima) + len(minima) + len(saddles)))
             mx, my = crit
             rx = self.start_point[0] + mx*dx
@@ -931,12 +947,13 @@ class NeumannTracer(object):
                 new_tracer = NeumannTracer(
                     span*upsample, span*upsample, new_dx, new_dy, self.func,
                     start_point=(self.sx + (mx - span/2.00523)*dx,
-                                 self.sy + (my - span/2.00523)*dy))
+                                 self.sy + (my - span/2.00523)*dy),
+                    verbose=False)
                 new_tracer.find_critical_points()
                 upsample_tracers.append(new_tracer)
 
-        print               
-        print 'Replacing critical points...'
+        self.vprint()
+        self.vprint('Replacing critical points...')
         ups_max, ups_min, ups_sad, ups_deg = [], [], [], []
         for i, tracer in enumerate(upsample_tracers):
             new_max, new_min, new_sad, new_deg = tracer.crits
@@ -1016,7 +1033,7 @@ class NeumannTracer(object):
         involve resampling.
 
         '''
-        print 'Pruning critical points'
+        self.vprint('Pruning critical points')
         maxima, minima, saddles, degenerate = self.crits
 
         tupmaxima = [tuple(j) for j in maxima]
@@ -1027,9 +1044,9 @@ class NeumannTracer(object):
         realsaddles = n.ones(len(saddles), dtype=bool)
 
         for i in range(len(saddles)):
-            lineprint('\r\tChecking saddle {0} / {1}'.format(i,
-                                                             len(saddles)),
-                      False)
+            self.vprint('\r\tChecking saddle {0} / {1}'.format(i,
+                                                              len(saddles)),
+                       False)
             saddle = saddles[i]
             adj = all_adj_indices.copy()
             adj[:, 0] += saddle[0]
@@ -1041,11 +1058,9 @@ class NeumannTracer(object):
             for coords in adj:
                 coords = tuple(coords)
                 if tuple(coords) in tupmaxima:
-                    #print saddle, coords, tupmaxima
                     adjmax.append(coords)
                 if tuple(coords) in tupminima:
                     adjmin.append(coords)
-                    #print saddle, coords, tupminima
             if len(adjmax) > 1:
                 heights = map(lambda j: self.arr[j[0], j[1]], adjmax)
                 fakemax = n.argmin(heights)
@@ -1056,7 +1071,7 @@ class NeumannTracer(object):
                 fakemin = n.argmax(heights)
                 realminima[tupminima.index(adjmin[fakemin])] = False
                 realsaddles[i] = False
-        lineprint()
+        self.vprint()
         maxima = n.array(maxima)[realmaxima]
         maxima = [tuple(c) for c in maxima]
         minima = n.array(minima)[realminima]
@@ -1077,13 +1092,13 @@ class NeumannTracer(object):
         if not self.found_crits:
             self.find_critical_points()
 
-        print 'Tracing Neumann lines...'
+        self.vprint('Tracing Neumann lines...')
 
         arr = self.arr
 
         curs = 0
         for saddle in self.saddles:
-            lineprint('\r\tCurrent saddle {0} / {1}'.format(
+            self.vprint('\r\tCurrent saddle {0} / {1}'.format(
                 curs, len(self.saddles)), False)
             curs += 1
 
@@ -1181,7 +1196,7 @@ class NeumannTracer(object):
                     else:
                         self.minima.append(tuple(endcoord))
 
-        lineprint()
+        self.vprint()
         self.crits_dict = critical_points_to_index_dict(self.crits)
         self.traced_lines = True
 
@@ -1219,18 +1234,18 @@ class NeumannTracer(object):
         '''
         Calculate the hessian at every point of self.arr.
         '''
-        lineprint('Filling Hessian domain array...')
+        self.vprint('Filling Hessian domain array...')
         arr = self.hessian_arr
         sx, sy = self.start_point
         dx, dy = self.dr
         xnum, ynum = self.shape
         for x in range(xnum):
-            lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+            self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
             for y in range(ynum):
                 arr[x, y] = hessian_det(self.func, sx + x*dx, sy + y*dy, dx, dy)
 
         self.hessian_filled = True
-        lineprint()
+        self.vprint()
 
     def build_graph(self):
         '''Build a CriticalGraph with all the critical points of self as
@@ -1465,27 +1480,27 @@ class NeumannTracer(object):
             self.make_hessian_array()
 
     def get_gradients_array(self):
-        print 'Calculating gradients array...'
+        self.vprint('Calculating gradients array...')
         grad_arr = self.arr.copy()
         sx, sy = self.start_point
         dx, dy = self.dr
         xnum, ynum = self.shape
         for x in range(xnum):
-            lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+            self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
             for y in range(ynum):
                 gradient = grad(self.func, sx+x*dx, sy+y*dy, dx, dy)
                 grad_arr[x, y] = n.arctan2(gradient[1], gradient[0])
-        print
+        self.vprint()
         return grad_arr
 
     def get_nearby_gradients_array(self):
-        print 'Calculating nearby gradients array...'
+        self.vprint('Calculating nearby gradients array...')
         grad_arr = self.arr.copy()
         sx, sy = self.start_point
         dx, dy = self.dr
         xnum, ynum = self.shape
         for x in range(xnum):
-            lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+            self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
             for y in range(ynum):
                 gradient = grad(self.func, sx+x*dx, sy+y*dy, dx, dy)
                 orthdir = rotation_matrix(n.pi/2).dot(gradient)
@@ -1514,7 +1529,7 @@ class NeumannTracer(object):
                 # rel_ang_2 = angle_between_vectors(orth_grad_2, gradient)
 
                 grad_arr[x, y] = n.exp(-1 * (corr_1 + corr_2)**2 / (n.pi/4)**2)
-        print
+        self.vprint()
         return grad_arr
 
     def plot(self, show_critical_points=True,
@@ -1530,6 +1545,7 @@ class NeumannTracer(object):
              maxima_style=maxima_style_old,  # Defined near top of file
              minima_style=minima_style_old,
              saddle_style = saddle_style_rami,
+             interpolation='none',
              cmap='Spectral_r'):
         '''
         Plot and return a graph showing (optionally):
@@ -1547,6 +1563,10 @@ class NeumannTracer(object):
         - plot_nearby_gradients: same, but nearby?
         - save: save at the given filename
         - figax: plot to the given (fig, ax) tuple, if any
+        - interpolation: the interpolation of the main image array
+                         (try 'bicubic' to blend)
+        - cmap: the name of the colormap, defaults to 'Spectral_r', used
+                to be 'RdBuYl'.
         '''
         if save:
             mpl_interactive(False)
@@ -1582,7 +1602,10 @@ class NeumannTracer(object):
         upsampled_degenerate = n.array(upsampled_degenerate)
 
         if figax is None:
-            fig, ax = plt.subplots()
+            if self.figax[0] is not None and self.figax[1] is not None:
+                fig, ax = self.figax
+            else:
+                fig, ax = plt.subplots()
         else:
             fig, ax = figax
 
@@ -2036,7 +2059,7 @@ odd_adj_indices =  n.array([[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [0, -1]])
 all_adj_indices = n.array([[-1, -1], [-1, 0], [-1, 1], [0, 1],
                            [1, 1], [1, 0], [1, -1], [0, -1]])
 safe_adj_indices = n.array([[-1, 0], [0, 1], [1, 0], [0, -1]])
-def get_critical_points(arr, to_edges=False):
+def get_critical_points(arr, to_edges=False, verbose=True):
     lx, ly = arr.shape
     adjs = n.zeros(6, dtype=n.float64)
 
@@ -2051,7 +2074,8 @@ def get_critical_points(arr, to_edges=False):
     for x, y in product(xrange(lx), xrange(ly)):
         if x != prevx:
             prevx = x
-            lineprint('\r\tx = {0} / {1}'.format(x, lx), False)
+            if verbose:
+                lineprint('\r\tx = {0} / {1}'.format(x, lx), False)
         if to_edges or (x != 0 and y != 0 and x != (lx-1) and y != (ly-1)):
             val = arr[x, y]
             if x % 2 == 0:
@@ -2087,7 +2111,8 @@ def get_critical_points(arr, to_edges=False):
                        'is symmetrical about this point.')
 
 
-    lineprint()
+    if verbose:
+        lineprint()
 
     return (maxima, minima, saddles, degenerate)
     #return (n.array(maxima), n.array(minima),
