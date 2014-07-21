@@ -249,6 +249,13 @@ from matplotlib.patches import Polygon
 import random
 import os
 import sys
+from functools import partial
+
+try:
+    import cneumann as cneu
+except ImportError:
+    cneu = None
+    
 
 try:
     import mayavi.mlab as may
@@ -1604,10 +1611,12 @@ class NeumannTracer(object):
         if figax is None:
             if self.figax[0] is not None and self.figax[1] is not None:
                 fig, ax = self.figax
+                ax.clear()
             else:
                 fig, ax = plt.subplots()
         else:
             fig, ax = figax
+            ax.clear()
 
         if not show_domain_patches:
             ax.imshow(plotarr, cmap=cmap, interpolation='none',
@@ -2232,7 +2241,8 @@ def range_factors(a, b=None, best=False):
 sign_permutations = set(chain(permutations([1, 1]),
                               permutations([1, -1]),
                               permutations([-1, -1])))
-def periodic_random_wave_function(energy, seed=0, returnall=False):
+def periodic_random_wave_function(energy, seed=0, returnall=False,
+                                  compiled=True):
     if seed == 0:
         seed = n.random.randint(100000000)
 
@@ -2258,12 +2268,17 @@ def periodic_random_wave_function(energy, seed=0, returnall=False):
     amps = n.array(amps)
     phases = n.array(phases)
 
-    def func(x, y):
-        res = 0.0
-        xyarr = n.array([x, y], dtype=n.float64)
-        interior = wvs.dot(xyarr) + phases
-        exterior = amps*n.sin(interior)
-        return n.sum(exterior)
+    if compiled and cneu is not None:
+        func = partial(cneu.random_wave_function, wvs.astype(n.double),
+                       amps.astype(n.double), phases.astype(n.double))
+
+    else:
+        def func(x, y):
+            res = 0.0
+            xyarr = n.array([x, y], dtype=n.float64)
+            interior = wvs.dot(xyarr) + phases
+            exterior = amps*n.sin(interior)
+            return n.sum(exterior)
     if returnall:
         return (func, (amps, wvs, phases))
     return func
