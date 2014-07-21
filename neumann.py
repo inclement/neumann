@@ -111,6 +111,17 @@ statistics. Specifically:
 At the time of writing, the areas/perimeters/rhos are *not*
 normalised properly.
 
+Compilation
+-----------
+
+The code now includes a cython version of some routines, which is a lot faster
+(even though the rwm functions were already using numpy).
+
+If cneumann.pyx exists and is compiled (to cneumann.so), the main code
+will automatically load and try to use it. However, if the cython code isn't
+available, it will fall back to pure python rather than failing (even if
+you specify :code:`compiled=True` to functions that take this argument).
+
 Plotting
 ========
 
@@ -254,6 +265,8 @@ from functools import partial
 try:
     import cneumann as cneu
 except ImportError:
+    print ('Failed to import cneumann. Everything will work fine, but if '
+           'fixed this will make things much faster!')
     cneu = None
     
 
