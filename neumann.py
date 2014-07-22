@@ -269,7 +269,6 @@ except ImportError:
            'fixed this will make things much faster!')
     cneu = None
     
-
 try:
     import mayavi.mlab as may
 except ImportError:
@@ -287,6 +286,7 @@ patch_linestyles = ['solid','dashed','dashdot','dotted']
 
 
 # Some default styles for plotting
+# These may be passed as options in the NeumannTracer plot function
 maxima_style_old = {'c': 'r'}
 minima_style_old = {'c': 'b'}
 saddle_style_old = {'color': 'yellow'}
@@ -829,7 +829,7 @@ class NeumannTracer(object):
         self.dy = dy
         self.dr = (dx, dy)
         self.func = func
-        self.start_point = start_point
+        self.start_point = n.array(start_point).astype(n.double)  # type for cython
         self.sx = start_point[0]
         self.sy = start_point[1]
         self.upsample = upsample
@@ -911,7 +911,7 @@ class NeumannTracer(object):
         self.vprint()
         self.arr_filled = True
 
-    def find_critical_points(self):
+    def find_critical_points(self, compiled=True):
         '''
         Iterate over self.arr walking about each pixel and checking the
         number of sign changes. Bins the result appropriately as a
@@ -922,8 +922,12 @@ class NeumannTracer(object):
             self.fill_arr()
         self.vprint('Finding critical points...')
 
-        maxima, minima, saddles, degenerate = get_critical_points(
-            self.arr, self.to_edges, self.verbose)
+        if compiled and cneu is not None:
+            maxima, minima, saddles, degenerate = cneu.get_critical_points(
+                self.arr, self.to_edges, self.verbose)
+        else:
+            maxima, minima, saddles, degenerate = get_critical_points(
+                self.arr, self.to_edges, self.verbose)
             
         self.crits = (maxima, minima, saddles, degenerate)
         #self.prune_critical_points()
@@ -1100,7 +1104,7 @@ class NeumannTracer(object):
         saddles = [tuple(c) for c in saddles]
         self.crits = maxima, minima, saddles, degenerate
 
-    def trace_neumann_lines(self):
+    def trace_neumann_lines(self, compiled=True):
         '''For every saddle in self.crits, drop 4 Neumann lines at the points
         of adjacent sign change, each gradient ascending/descending
         appropriately until they hit another critical point or appear
@@ -1111,6 +1115,11 @@ class NeumannTracer(object):
             self.fill_arr()
         if not self.found_crits:
             self.find_critical_points()
+
+        if compiled and cneu is not None:
+            gradient_trace_func = cneu.trace_gradient_line
+        else:
+            gradient_trace_func = trace_gradient_line
 
         self.vprint('Tracing Neumann lines...')
 
@@ -1229,6 +1238,7 @@ class NeumannTracer(object):
         if not self.found_crits:
             self.find_critical_points()
 
+            
         print 'maxima'
         for entry in self.maxima:
             print (entry, self.func(self.sx+entry[0]*self.dx,
@@ -2543,7 +2553,7 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2, func=None,
 
 def get_periodic_tracer(energy, gridsize=None, downscale=2,
                         returnall=False, upsample=5,
-                        seed=0):
+                        seed=0, compiled=True):
     '''Returns a :class:`NeumannTracer` covering the periodic domain of a
     torus with the given scale and number of wavevectors.
 
@@ -2558,7 +2568,7 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
     print 'length is', length
     periodicity = 2*n.pi
     f, d2 = periodic_random_wave_function(energy, returnall=True,
-                                          seed=seed)
+                                          seed=seed, compiled=compiled)
     tracer = NeumannTracer(length, length,
                            periodicity/(1.*length), periodicity/(1.*length),
                            f,
