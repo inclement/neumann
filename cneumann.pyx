@@ -26,7 +26,7 @@ cpdef double random_wave_function(double [:, :] wvs, double [:] amps,
     return result
 
 
-cdef double dotprod(double wvx, double wvy, double x, double y):
+cdef inline double dotprod(double wvx, double wvy, double x, double y):
     '''Fast dot product meeting our exact needs.'''
     return wvx * x + wvy * y
 
@@ -173,8 +173,8 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
     cdef long nearx, neary
 
     while True:
-        gradient = grad(func, startx+cx*dx, starty+cy*dy, dx, dy) * dirfac
-        angle = atan2(gradient[1], gradient[0])
+        gradient = grad(func, startx+cx*dx, starty+cy*dy, dx, dy)
+        angle = atan2(gradient[1] * dirfac, gradient[0] * dirfac)
 
         cx += 0.25*n.cos(angle)
         cy += 0.25*n.sin(angle)
@@ -218,13 +218,13 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                         return (points, coords)
 
 
-cdef grad(func, double x, double y, double dx, double dy):
+cdef inline grad(func, double x, double y, double dx, double dy):
     '''Local gradient of given function at given postion and jump.'''
     cdef double dfdx, dfdy
     dfdx = (func(x, y)-func(x+0.015*dx, y))/(0.015*dx)
     dfdy = (func(x, y)-func(x, y+0.015*dy))/(0.015*dy)
     return dfdx, dfdy
 
-cdef magdiff(double a, double b, double c, double d):
+cdef inline magdiff(double a, double b, double c, double d):
     '''Magnitude of the distance from (a, b) to (c, d).'''
     return sqrt(pow(c-a, 2) + pow(d-b, 2))

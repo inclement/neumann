@@ -1172,7 +1172,7 @@ class NeumannTracer(object):
                 self.extra_lines.append(n.array([[saddlex, saddley],
                                                  [saddlex+2*diff[0],
                                                   saddley+2*diff[1]]]))
-                points, endcoord = trace_gradient_line(
+                points, endcoord = gradient_trace_func(
                     coords[0] + 0.1*diff[0],
                     coords[1] + 0.1*diff[1],
                     self.dx, self.dy,
@@ -1192,7 +1192,7 @@ class NeumannTracer(object):
                     ang_diff = n.abs(ang_diff)
 
                     if ang_diff > 0.6*n.pi:
-                        points, endcoord = trace_gradient_line(
+                        points, endcoord = gradient_trace_func(
                             coords[0] + 0.3*diff[0],
                             coords[1] + 0.3*diff[1],
                             self.dx, self.dy,
