@@ -15,6 +15,7 @@ from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.graphics import BindTexture
 from kivy.vector import Vector
+from kivy.core.window import Window
 
 from shaderwidget import ShaderWidget
 
@@ -896,8 +897,14 @@ class Interface(BoxLayout):
 
 
 class NeumannApp(App):
+    show = BooleanProperty(True)
     def build(self):
+        Window.bind(on_key_down=self.on_key_down)
         return Interface()
+
+    def on_key_down(self, window, keycode, *args):
+        if keycode == 35:
+            self.show = not self.show
 
     def on_pause(self):
         return True

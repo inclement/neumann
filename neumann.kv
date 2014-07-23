@@ -78,161 +78,165 @@
             id: areaselect
             pos_hint: {'x': 0.0, 'y': 0.0}
     VSeparator:
-    BoxLayout:
+    GridLayout:
         size_hint_y: None
-        height: dp(40)
-        Widget:
-            size_hint_x: None
-            width: dp(5)
-        Label:
-            size_hint_x: None
-            width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'Grad overlay:'
-        Slider:
-            orientation: 'horizontal'
-            id: opacity_slider
-            min: 0.
-            max: 1.
-            value: 0.
-        Label:
-            size_hint_x: None
-            width: sp(40)
-            text: str(opacity_slider.value)[:4]
-        Label:
-            size_hint_x: None
-            width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'while cutoff'
-        Slider:
-            orientation: 'horizontal'
-            id: while_cutoff_slider
-            min: 2
-            max: 100
-            value: 40
-        Label:
-            size_hint_x: None
-            width: sp(40)
-            text: str(while_cutoff_slider.value)[:4]
-    VSeparator:
-    BoxLayout:
-        size_hint_y: None
-        height: dp(40)
-        Widget:
-            size_hint_x: None
-            width: dp(5)
-        Label:
-            size_hint_x: None
-            width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'Critical overlay:'
-        Slider:
-            orientation: 'horizontal'
-            id: critical_opacity_slider
-            min: 0.
-            max: 1.
-            value: 1.
-        Label:
-            size_hint_x: None
-            width: sp(40)
-            text: str(critical_opacity_slider.value)[:4]
-        Label:
-            size_hint_x: None
-            width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'Jump:'
-        Slider:
-            orientation: 'horizontal'
-            id: critical_jump_slider
-            min: 0.
-            max: 0.15
-            value: 0.03
-        Label:
-            size_hint_x: None
-            width: sp(40)
-            text: str(critical_jump_slider.value)[:4]
+        height: self.minimum_height if app.show else 0
+        cols: 1
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            Widget:
+                size_hint_x: None
+                width: dp(5)
+            Label:
+                size_hint_x: None
+                width: self.texture_size[0] if self.texture_size[0] is not None else 10
+                text: 'Grad overlay:'
+            Slider:
+                orientation: 'horizontal'
+                id: opacity_slider
+                min: 0.
+                max: 1.
+                value: 0.
+            Label:
+                size_hint_x: None
+                width: sp(40)
+                text: str(opacity_slider.value)[:4]
+            Label:
+                size_hint_x: None
+                width: self.texture_size[0] if self.texture_size[0] is not None else 10
+                text: 'while cutoff'
+            Slider:
+                orientation: 'horizontal'
+                id: while_cutoff_slider
+                min: 2
+                max: 100
+                value: 40
+            Label:
+                size_hint_x: None
+                width: sp(40)
+                text: str(while_cutoff_slider.value)[:4]
+        VSeparator:
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            Widget:
+                size_hint_x: None
+                width: dp(5)
+            Label:
+                size_hint_x: None
+                width: self.texture_size[0] if self.texture_size[0] is not None else 10
+                text: 'Critical overlay:'
+            Slider:
+                orientation: 'horizontal'
+                id: critical_opacity_slider
+                min: 0.
+                max: 1.
+                value: 1.
+            Label:
+                size_hint_x: None
+                width: sp(40)
+                text: str(critical_opacity_slider.value)[:4]
+            Label:
+                size_hint_x: None
+                width: self.texture_size[0] if self.texture_size[0] is not None else 10
+                text: 'Jump:'
+            Slider:
+                orientation: 'horizontal'
+                id: critical_jump_slider
+                min: 0.
+                max: 0.15
+                value: 0.03
+            Label:
+                size_hint_x: None
+                width: sp(40)
+                text: str(critical_jump_slider.value)[:4]
 
-    VSeparator:
-    BoxLayout:
-        size_hint_y: None
-        height: dp(40)
-        Widget:
-            size_hint_x: None
-            width: dp(5)
-        Label:
-            size_hint_x: None
-            width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'Phase increment:'
-        Slider:
-            orientation: 'horizontal'
-            id: phase_slider
-            min: 0.
-            max: 2*3.14159265
-            value: shader.phase_increment
-        Label:
-            size_hint_x: None
-            width: sp(40)
-            text: str(phase_slider.value)[:4]
-        Button:
-            size_hint_x: None
-            width: sp(60)
-            text: 'animate'
-            on_press: shader.animate_phase_increment(5)
-    VSeparator:
-    BoxLayout:
-        size_hint_y: None
-        height: dp(40)
-        Widget:
-            size_hint_x: None
-            width: dp(5)
-        Label:
-            size_hint_x: None
-            width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'Resolution:'
-        Slider:
-            orientation: 'horizontal'
-            id: size_slider
-            min: 5
-            max: 1000
-            value: 512
-        Label:
-            size_hint_x: None
-            width: sp(40)
-            text: str(int(size_slider.value))
-        Label:
-            size_hint_x: None
-            width: self.texture_size[0] if self.texture_size[0] is not None else 10
-            text: 'Crit fbo_size:'
-        Slider:
-            orientation: 'horizontal'
-            id: critical_fbo_size_slider
-            min: 10 
-            max: 2*size_slider.value
-            value: 0.5*size_slider.value
-        Label:
-            size_hint_x: None
-            width: sp(40)
-            text: str(critical_fbo_size_slider.value)[:4]
-    VSeparator:
-    BoxLayout:
-        size_hint_y: None
-        height: sp(40)
-        Label:
-            text: 'Scale:'
-            size_hint_x: None
-            width: self.texture_size[0] + 10
-        TextInput:
-            id: scale_input
-            font_size: dp(20)
-            text: '17'
-            multiline: False
-            on_text_validate: shader.set_periodic_shader(scale_input.text, shader.number, shader.downscale)
-        Button:
-            id: new_wv_button
-            text: 'Generate new\n  wavevectors'
-            on_press: shader.set_periodic_shader(scale_input.text, shader.number, shader.downscale)
-        Button:
-            text: 'View wavevectors'
-            on_press: shader.view_wavevectors()
-        Button:
-            text: '   reset\nviewport'
-            on_press: areaselect.reset_viewport()
+        VSeparator:
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            Widget:
+                size_hint_x: None
+                width: dp(5)
+            Label:
+                size_hint_x: None
+                width: self.texture_size[0] if self.texture_size[0] is not None else 10
+                text: 'Phase increment:'
+            Slider:
+                orientation: 'horizontal'
+                id: phase_slider
+                min: 0.
+                max: 2*3.14159265
+                value: shader.phase_increment
+            Label:
+                size_hint_x: None
+                width: sp(40)
+                text: str(phase_slider.value)[:4]
+            Button:
+                size_hint_x: None
+                width: sp(60)
+                text: 'animate'
+                on_press: shader.animate_phase_increment(5)
+        VSeparator:
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            Widget:
+                size_hint_x: None
+                width: dp(5)
+            Label:
+                size_hint_x: None
+                width: self.texture_size[0] if self.texture_size[0] is not None else 10
+                text: 'Resolution:'
+            Slider:
+                orientation: 'horizontal'
+                id: size_slider
+                min: 5
+                max: 1000
+                value: 512
+            Label:
+                size_hint_x: None
+                width: sp(40)
+                text: str(int(size_slider.value))
+            Label:
+                size_hint_x: None
+                width: self.texture_size[0] if self.texture_size[0] is not None else 10
+                text: 'Crit fbo_size:'
+            Slider:
+                orientation: 'horizontal'
+                id: critical_fbo_size_slider
+                min: 10 
+                max: 2*size_slider.value
+                value: 0.5*size_slider.value
+            Label:
+                size_hint_x: None
+                width: sp(40)
+                text: str(critical_fbo_size_slider.value)[:4]
+        VSeparator:
+        BoxLayout:
+            size_hint_y: None
+            height: sp(40)
+            Label:
+                text: 'Scale:'
+                size_hint_x: None
+                width: self.texture_size[0] + 10
+            TextInput:
+                id: scale_input
+                font_size: dp(20)
+                text: '17'
+                multiline: False
+                on_text_validate: shader.set_periodic_shader(scale_input.text, shader.number, shader.downscale)
+            Button:
+                id: new_wv_button
+                text: 'Generate new\n  wavevectors'
+                on_press: shader.set_periodic_shader(scale_input.text, shader.number, shader.downscale)
+            Button:
+                text: 'View wavevectors'
+                on_press: shader.view_wavevectors()
+            Button:
+                text: '   reset\nviewport'
+                on_press: areaselect.reset_viewport()
 
 <NeumannShader>:
     fs: gradient_shader
