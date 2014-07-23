@@ -815,11 +815,15 @@ class NeumannTracer(object):
     * to_edges: May be False (ignore edges), or 'periodic' (use periodic
       boundary conditions)
     * verbose: Whether to print information about ongoing calculations
+    * func_params: This may be used to pass extra information about the function,
+                   which may let cython be quicker. Right now supports only a tuple of
+                   the form "('rwm', wvs, amplitudes, phases)"
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
                  start_point=(0.00123, 0.00123), to_edges=False,
-                 upsample=5, verbose=True):
+                 upsample=5, verbose=True,
+                 func_params=()):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.xnum = xnum
@@ -833,6 +837,8 @@ class NeumannTracer(object):
         self.sx = start_point[0]
         self.sy = start_point[1]
         self.upsample = upsample
+
+        self.func_params = func_params
 
         self.to_edges = to_edges
 
@@ -1179,7 +1185,8 @@ class NeumannTracer(object):
                     self.xnum, self.ynum,
                     self.func, self.crits_dict,
                     self.start_point,
-                    direction, self.to_edges)
+                    direction, self.to_edges,
+                    func_params=self.func_params)
 
                 # Check here whether the line has gone in totally the
                 # wrong direction. Try a simple retest if so.
@@ -1199,7 +1206,8 @@ class NeumannTracer(object):
                             self.xnum, self.ynum,
                             self.func, self.crits_dict,
                             self.start_point,
-                            direction, self.to_edges)
+                            direction, self.to_edges,
+                            func_params=self.func_params)
 
 
                 if len(points) > 4:
@@ -1982,8 +1990,11 @@ def get_filled_array(xnum, ynum, dx, dy, func, start_point=(0.0, 0.0)):
     return arr
 
 def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
-                        critdict, start_point, direction, to_edges):
-    #print 'Tracing gradient line'
+                        critdict, start_point, direction, to_edges,
+                        func_params=()):
+    '''Trace gradient (Neumann) line at point until reaching a critical point.
+    func_params is ignored by this python implementation (but may be used by cython).
+    '''
     cx, cy = sx, sy
     startx, starty = start_point
     if direction == 'down':
@@ -2553,7 +2564,8 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2, func=None,
 
 def get_periodic_tracer(energy, gridsize=None, downscale=2,
                         returnall=False, upsample=5,
-                        seed=0, compiled=True):
+                        seed=0, compiled=True,
+                        pass_func_params=True):
     '''Returns a :class:`NeumannTracer` covering the periodic domain of a
     torus with the given scale and number of wavevectors.
 
@@ -2569,10 +2581,16 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
     periodicity = 2*n.pi
     f, d2 = periodic_random_wave_function(energy, returnall=True,
                                           seed=seed, compiled=compiled)
+    if pass_func_params:
+        func_params = ('rwm', d2[1].astype(n.double), d2[0].astype(n.double),
+                       d2[2].astype(n.double))
+    else:
+        func_params = ()
     tracer = NeumannTracer(length, length,
                            periodicity/(1.*length), periodicity/(1.*length),
                            f,
-                           to_edges='periodic', upsample=upsample)
+                           to_edges='periodic', upsample=upsample,
+                           func_params=func_params)
     if returnall:
         return tracer, f, d2, length
     return tracer

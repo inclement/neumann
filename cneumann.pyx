@@ -147,7 +147,8 @@ cpdef classify_point(double [:] ds):
 cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                           double xnum, double ynum, func,
                           dict critdict, double [:] start_point,
-                          bytes direction, to_edges):
+                          bytes direction, to_edges,
+                          tuple func_params=()):
     '''Traces the line of maximal gradient from the given position until
     reaching a critical point or until not really moving any more.'''
 
@@ -172,8 +173,19 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
     cdef double angle
     cdef long nearx, neary
 
+    cdef bint use_func_params = 0
+    cdef double [:, :] wvs
+    cdef double [:] amps
+    cdef double [:] phases
+    if func_params:
+        use_func_params = 1
+        params_type, wvs, amps, phases = func_params
     while True:
-        gradient = grad(func, startx+cx*dx, starty+cy*dy, dx, dy)
+        if use_func_params:
+            gradient = grad_rwm(wvs, amps, phases, startx + cx*dx, starty + cy*dy,
+                                dx, dy)
+        else:
+            gradient = grad(func, startx+cx*dx, starty+cy*dy, dx, dy)
         angle = atan2(gradient[1] * dirfac, gradient[0] * dirfac)
 
         cx += 0.25*n.cos(angle)
@@ -218,11 +230,22 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                         return (points, coords)
 
 
-cdef inline grad(func, double x, double y, double dx, double dy):
+cdef inline tuple grad(func, double x, double y, double dx, double dy):
     '''Local gradient of given function at given postion and jump.'''
     cdef double dfdx, dfdy
     dfdx = (func(x, y)-func(x+0.015*dx, y))/(0.015*dx)
     dfdy = (func(x, y)-func(x, y+0.015*dy))/(0.015*dy)
+    return dfdx, dfdy
+
+cdef inline tuple grad_rwm(double [:, :] wvs, double [:] amps, double [:] phases,
+                     double x, double y, double dx, double dy):
+    '''Local gradient of the rwm with the given parameters at the given position
+    and jump.'''
+    cdef double dfdx, dfdy
+    dfdx = (random_wave_function(wvs, amps, phases, x, y) -
+            random_wave_function(wvs, amps, phases, x+0.015*dx, y)) / (0.015 * dx)
+    dfdy = (random_wave_function(wvs, amps, phases, x, y) -
+            random_wave_function(wvs, amps, phases, x, y+0.015*dy)) / (0.015 * dy)
     return dfdx, dfdy
 
 cdef inline magdiff(double a, double b, double c, double d):
