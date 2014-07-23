@@ -899,7 +899,7 @@ class NeumannTracer(object):
         dx, dy = self.dr
         return self.func(sx + x*dx, sy + y*dy)
 
-    def fill_arr(self):
+    def fill_arr(self, compiled=True):
         '''
         Sample the function on a (self.xnum, self.ynum) array.
 
@@ -910,10 +910,13 @@ class NeumannTracer(object):
         sx, sy = self.start_point
         dx, dy = self.dr
         xnum, ynum = self.shape
-        for x in range(xnum):
-            self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
-            for y in range(ynum):
-                arr[x, y] = self.func(sx + x*dx, sy + y*dy)
+        if compiled and cneu is not None:
+            cneu.fill_arr(self.func, sx, sy, dx, dy, xnum, ynum, arr)
+        else:
+            for x in range(xnum):
+                self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+                for y in range(ynum):
+                    arr[x, y] = self.func(sx + x*dx, sy + y*dy)
         self.vprint()
         self.arr_filled = True
 

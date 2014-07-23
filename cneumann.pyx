@@ -4,9 +4,10 @@ Cython functions for finding Neumann domains.
 
 import numpy as n
 cimport numpy as n
+int64 = n.int64
 
 cimport cython
-from libc.math cimport sin, atan2, sqrt, pow, round
+from libc.math cimport sin, cos, atan2, sqrt, pow, round
 
 cpdef double random_wave_function(double [:, :] wvs, double [:] amps,
                                   double [:] phases, double x, double y):
@@ -29,6 +30,15 @@ cpdef double random_wave_function(double [:, :] wvs, double [:] amps,
 cdef inline double dotprod(double wvx, double wvy, double x, double y):
     '''Fast dot product meeting our exact needs.'''
     return wvx * x + wvy * y
+
+
+cpdef fill_arr(func, double sx, double sy, double dx, double dy, long xnum,
+               long ynum, double [:, :] arr):
+    for x in range(xnum):
+        if x % 100 == 0:
+            print('\r\tx = {0} / {1}'.format(x, xnum), False)
+        for y in range(ynum):
+            arr[x, y] = func(sx + x*dx, sy + y*dy)
 
 
 cdef long [:, :] even_adj_indices = n.array(
@@ -156,7 +166,7 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                                                     # effectively only be
                                                     # true/false
 
-    cdef long ixnum = n.int64(xnum), iynum = n.int64(ynum)
+    cdef long ixnum = <long>xnum, iynum = <long>ynum
     cdef double cx = sx, cy = sy
     cdef double startx = start_point[0]
     cdef double starty = start_point[1]
@@ -172,6 +182,7 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
     cdef tuple gradient
     cdef double angle
     cdef long nearx, neary
+    cdef long index, indx, indy
 
     cdef bint use_func_params = 0
     cdef double [:, :] wvs
@@ -180,6 +191,7 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
     if func_params:
         use_func_params = 1
         params_type, wvs, amps, phases = func_params
+
     while True:
         if use_func_params:
             gradient = grad_rwm(wvs, amps, phases, startx + cx*dx, starty + cy*dy,
@@ -188,8 +200,8 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
             gradient = grad(func, startx+cx*dx, starty+cy*dy, dx, dy)
         angle = atan2(gradient[1] * dirfac, gradient[0] * dirfac)
 
-        cx += 0.25*n.cos(angle)
-        cy += 0.25*n.sin(angle)
+        cx += 0.25*cos(angle)
+        cy += 0.25*sin(angle)
 
         if len(points) > 20:
             if magdiff(cx, cy, points[-20][0], points[-20][1]) < 0.75:
@@ -204,8 +216,8 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
             else:
                 return (points, None)
 
-        nearx = n.int64(round(cx))
-        neary = n.int64(round(cy))
+        nearx = <long>round(cx)
+        neary = <long>round(cy)
         if to_edges_bool:
             nearx %= ixnum
             neary %= iynum
@@ -218,9 +230,11 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                 points.append((nearx, neary))
                 return (points, (nearx, neary))
         else:
-            for indices in safe_adj_indices:
-                if (nearx + indices[0], neary + indices[1]) in critdict:
-                    coords = (nearx + indices[0], neary + indices[1])
+            for index in range(len(safe_adj_indices)):
+                indx = safe_adj_indices[index, 0]
+                indy = safe_adj_indices[index, 1]
+                if (nearx + indx, neary + indy) in critdict:
+                    coords = (nearx + indx, neary + indy)
                     crit_type = critdict[coords]
                     if ((crit_type == 'maximum' and direction == 'down') or
                         (crit_type == 'minimum' and direction == 'up')):
@@ -230,7 +244,7 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                         return (points, coords)
 
 
-cdef inline tuple grad(func, double x, double y, double dx, double dy):
+cdef inline n.ndarray[double, ndim=1] grad(func, double x, double y, double dx, double dy):
     '''Local gradient of given function at given postion and jump.'''
     cdef double dfdx, dfdy
     dfdx = (func(x, y)-func(x+0.015*dx, y))/(0.015*dx)
