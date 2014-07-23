@@ -41,6 +41,7 @@ cdef inline double dotprod(double wvx, double wvy, double x, double y):
 
 cpdef fill_arr(func, double sx, double sy, double dx, double dy, long xnum,
                long ynum, double [:, :] arr, verbose=True):
+    cdef long x, y
     for x in range(xnum):
         if x % 100 == 0 and verbose:
             lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
