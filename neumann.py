@@ -269,11 +269,11 @@ except ImportError:
            'fixed this will make things much faster!')
     cneu = None
     
-try:
-    import mayavi.mlab as may
-except ImportError:
-    may = None
-    print 'Failed to import mayavi. 3d plotting will not work.'
+# try:
+#     import mayavi.mlab as may
+# except ImportError:
+#     may = None
+#     print 'Failed to import mayavi. 3d plotting will not work.'
 
 try:
     import igraph as ig
@@ -949,12 +949,18 @@ class NeumannTracer(object):
 
         self.found_crits = True
 
-    def upsample_critical_points(self, span=10):
+    def upsample_critical_points(self, span=10, compiled=True):
         '''Go through all the critical points of self, upsampling them (or using an
         existing upsampling region if possible).
         '''
         if not self.found_crits:
             self.find_critical_points()
+
+        if compiled and cneu is not None:
+            UpsampleTracerClass = cneu.UpsampleTracer  # This isn't really any
+                                                       # faster...not a success!
+        else:
+            UpsampleTracerClass = NeumannTracer
 
         maxima, minima, saddles, degenerate = self.crits
 
@@ -970,14 +976,15 @@ class NeumannTracer(object):
         new_dy = dy / upsample
 
         for i, crit in enumerate(maxima + minima + saddles):
-            self.vprint('Upsampling critical point {} / {}'.format(
-                i, len(maxima) + len(minima) + len(saddles)))
+            if i % 5 == 0:
+                self.vprint('Upsampling critical point {} / {}'.format(
+                    i, len(maxima) + len(minima) + len(saddles)))
             mx, my = crit
             rx = self.start_point[0] + mx*dx
             ry = self.start_point[1] + my*dy
             if not any([tracer.contains(rx, ry, max(tracer.dx, tracer.dy)) for
                         tracer in upsample_tracers]):
-                new_tracer = NeumannTracer(
+                new_tracer = UpsampleTracerClass(  # Class defined above
                     span*upsample, span*upsample, new_dx, new_dy, self.func,
                     start_point=(self.sx + (mx - span/2.00523)*dx,
                                  self.sy + (my - span/2.00523)*dy),
@@ -993,13 +1000,13 @@ class NeumannTracer(object):
             new_crits_dict = tracer.crits_dict
             for crit, crit_type in new_crits_dict.items():
                 mx, my = crit
-                rx = tracer.start_point[0] + mx*tracer.dx
-                ry = tracer.start_point[1] + my*tracer.dy
+                rx = tracer.sx + mx*tracer.dx
+                ry = tracer.sy + my*tracer.dy
 
-                if not any([
-                    earlier_tracer.contains(
-                        rx, ry, max(earlier_tracer.dr)) for
-                    earlier_tracer in upsample_tracers[:i]]):
+                for earlier_tracer in upsample_tracers[:i]:
+                    if earlier_tracer.contains(rx, ry, max(tracer.dx, tracer.dy)):
+                        break
+                else:
                     # The critical point isn't in the purview of another tracer,
                     # so let's find where it is and store it
 

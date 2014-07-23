@@ -9,6 +9,13 @@ int64 = n.int64
 cimport cython
 from libc.math cimport sin, cos, atan2, sqrt, pow, round
 
+import sys
+def lineprint(s='', newline=True):
+    sys.stdout.write(s)
+    if newline:
+        sys.stdout.write('\n')
+    sys.stdout.flush()
+
 cpdef double random_wave_function(double [:, :] wvs, double [:] amps,
                                   double [:] phases, double x, double y):
     '''Calculates the random wave function at the given x, y position with
@@ -33,10 +40,10 @@ cdef inline double dotprod(double wvx, double wvy, double x, double y):
 
 
 cpdef fill_arr(func, double sx, double sy, double dx, double dy, long xnum,
-               long ynum, double [:, :] arr):
+               long ynum, double [:, :] arr, verbose=True):
     for x in range(xnum):
-        if x % 100 == 0:
-            print('\r\tx = {0} / {1}'.format(x, xnum), False)
+        if x % 100 == 0 and verbose:
+            lineprint('\r\tx = {0} / {1}'.format(x, xnum), False)
         for y in range(ynum):
             arr[x, y] = func(sx + x*dx, sy + y*dy)
 
@@ -75,6 +82,8 @@ cpdef get_critical_points(double [:, :] arr,
     cdef double val
 
     for x in range(lx):
+        if x % 100 == 0 and verbose:
+            lineprint('\r\tx = {} / {}'.format(x, lx))
         for y in range(ly):
             if x != prevx:
                 prevx = x
@@ -114,6 +123,8 @@ cpdef get_critical_points(double [:, :] arr,
                     print 'A failure occurred at', x, y
                     print ('=> odd number of sign changes, perhaps the '
                            'function is symmetrical about this point.')
+    if verbose:
+        lineprint()
 
     return (maxima, minima, saddles, degenerate)
 
@@ -265,3 +276,89 @@ cdef inline tuple grad_rwm(double [:, :] wvs, double [:] amps, double [:] phases
 cdef inline magdiff(double a, double b, double c, double d):
     '''Magnitude of the distance from (a, b) to (c, d).'''
     return sqrt(pow(c-a, 2) + pow(d-b, 2))
+
+
+cdef class UpsampleTracer:
+    '''Simple Neumann tracer that can only find critical points,
+    with everything possible implemented in cython for speed.'''
+
+    cdef public double dx, dy, sx, sy
+    cdef public double [:, :] arr
+    cdef long xnum, ynum
+    cdef public list maxima, minima, saddles, degenerate
+    cdef public tuple crits
+    cdef public dict crits_dict
+    cdef object func
+
+    def __init__(self, long xnum, long ynum, double dx, double dy, func,
+                   start_point=(0.00123, 0.00123), verbose=False):
+        self.arr = n.zeros((xnum, ynum), dtype=n.float64)
+        self.xnum = xnum
+        self.ynum = ynum
+        self.dx = dx
+        self.dy = dy
+        self.sx = start_point[0]
+        self.sy = start_point[1]
+        self.func = func
+        self.fill_arr()
+
+    cpdef contains(self, double x, double y, double border=0.):
+        '''Return True if the x, y point is within self (sx -> sx + xnum*dx etc.),
+        else False.'''
+        cdef double sx = self.sx
+        cdef double sy = self.sy
+        cdef double dx = self.dx
+        cdef double dy = self.dy
+        cdef long xnum = self.xnum
+        cdef long ynum = self.ynum
+        if ((sx + border < x < sx + xnum*dx - border) and
+            (sy + border < y < sy + ynum*dy - border)):
+            return True
+        return False
+
+    cdef fill_arr(self):
+        '''
+        Sample the function on a (self.xnum, self.ynum) array.
+
+        Result stored in self.arr.
+        '''
+        arr = self.arr
+        cdef double sx = self.sx
+        cdef double sy = self.sy
+        cdef double dx = self.dx
+        cdef double dy = self.dy
+        cdef long xnum = self.xnum
+        cdef long ynum = self.ynum
+        fill_arr(self.func, sx, sy, dx, dy, xnum, ynum, arr, verbose=False)
+
+    cpdef find_critical_points(self):
+        '''
+        Iterate over self.arr walking about each pixel and checking the
+        number of sign changes. Bins the result appropriately as a
+        maximum, minimum, saddle or regular point, and store in
+        self.crits.
+        '''
+        maxima, minima, saddles, degenerate = get_critical_points(
+            self.arr, False, False)
+            
+        self.crits = (maxima, minima, saddles, degenerate)
+        self.maxima = self.crits[0]
+        self.minima = self.crits[1]
+        self.saddles = self.crits[2]
+        self.degenerate = self.crits[3]
+
+        self.crits_dict = critical_points_to_index_dict(self.crits)
+
+
+def critical_points_to_index_dict(crits):
+    maxima, minima, saddles, degenerate = crits
+    d = {}
+    for entry in maxima:
+        d[tuple(entry)] = 'maximum'
+    for entry in minima:
+        d[tuple(entry)] = 'minimum'
+    for entry in saddles:
+        d[tuple(entry)] = 'saddle'
+    for entry in degenerate:
+        d[tuple(entry)] = 'degenerate'
+    return d
