@@ -15,12 +15,7 @@ except ImportError:
     print ('Failed to import mayavi. 3d plotting will not work '
            '(but other stuff will work fine).')
 
-import sys
-try:
-    sys.path.append('/home/asandy')
-    from pyknot.rewrite.twosphere import get_random_spherical_harmonic
-except ImportError:
-    raise ImportError('Error: This module currently depends on c libraries on Sandy\'s computer!')
+from twosphere import get_random_spherical_harmonic
     
 
 class SphericalNeumannTracer(NeumannTracer):

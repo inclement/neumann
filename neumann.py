@@ -2665,7 +2665,8 @@ def get_domain_statistics_at(scales, domains=1000, downscale=3):
         length_factor = 1/length * real_length
         wavelength = 1/n.sqrt(2)
 
-        results[scale] = (areas, perimeters, rhos, degree_dists, length_factor)
+        results[scale] = (areas, perimeters, rhos, degree_dists,
+                          length_factor)
 
     for areas, perimeters, rhos, degrees, length_factor in results.itervalues():
         degrees /= degrees[0][0]/2.

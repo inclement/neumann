@@ -4,6 +4,7 @@ from Cython.Distutils import build_ext
 
 ext_modules = [
         Extension("cneumann",["cneumann.pyx"], libraries=["m"]),
+        Extension("ctwosphere",["ctwosphere.pyx"], libraries=["m"]),
 #        Extension("generationclassesfail",["generationclassesfail.pyx"],libraries=["m"]),
         ]
 
