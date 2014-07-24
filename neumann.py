@@ -2620,7 +2620,7 @@ def save_domain_results_at(scales, domains=1000, downscale=3,
         cPickle.dump(results, fileh)
 
     results2 = {}
-    for key, value in results.iteritems():
+    for scale, value in results.items():
         results2[key] = (value[0], value[1],
                          value[2], map(list, list(value[3])), value[4])
     with open('{}_{}.json'.format(filen, i), 'w') as fileh:
@@ -2648,6 +2648,7 @@ def get_domain_statistics_at(scales, domains=1000, downscale=3):
         perimeters = []
         rhos = []
         degree_dists = n.zeros((8,2))
+        diameters = []
 
         while len(areas) < domains:
             print 'Currently done', len(areas), 'domains'
@@ -2659,17 +2660,23 @@ def get_domain_statistics_at(scales, domains=1000, downscale=3):
             perimeters.extend(a.get_domain_perimeters())
             rhos.extend(a.get_domain_rhos())
             degree_dists += a.get_critical_degree_dists()
+            diameters.extend(a.get_domain_diameters())
 
         length = float(int(100/float(downscale) * float(scale)/5.))
         real_length = 2*n.pi
         length_factor = 1/length * real_length
         wavelength = 1/n.sqrt(2)
 
-        results[scale] = (areas, perimeters, rhos, degree_dists,
-                          length_factor)
 
-    for areas, perimeters, rhos, degrees, length_factor in results.itervalues():
-        degrees /= degrees[0][0]/2.
+        results[scale] = {'areas': areas, 'perimeters': perimeters,
+                          'rhos': rhos, 'degree_dists': degree_dists,
+                          'length_factor': length_factor,
+                          'energy': scale}
+                          
+    for scale, values in results.items():
+        if 'degree_dists' in values:
+            degree_dists = values['degree_dists']
+            degree_dists /= degree_dists[0, 0] / 2.
 
     return results
 
