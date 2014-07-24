@@ -256,7 +256,7 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                         return (points, coords)
 
 
-cdef inline n.ndarray[double, ndim=1] grad(func, double x, double y, double dx, double dy):
+cdef inline tuple grad(func, double x, double y, double dx, double dy):
     '''Local gradient of given function at given postion and jump.'''
     cdef double dfdx, dfdy
     dfdx = (func(x, y)-func(x+0.015*dx, y))/(0.015*dx)
