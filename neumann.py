@@ -1508,6 +1508,56 @@ class NeumannTracer(object):
             self.build_graph()
         return self.graph.get_domain_rhos()
 
+    def get_neumann_heights(self):
+        '''Returns a list of heights of all points on detected
+        Neumann lines.'''
+        if not self.traced_lines:
+            self.trace_neumann_lines()
+        lines = self.lines
+        heights = []
+        for line in lines:
+            for point in line:
+                height = self.func(*point)
+                heights.append(height)
+
+        return heights
+
+    def get_neumann_angles(self):
+        '''Returns a list of angles of the tangent at every Neumann
+        line point.'''
+        if not self.traced_lines:
+            self.trace_neumann_lines()
+        lines = self.lines
+        angles = []
+        for line in lines:
+            ts = n.roll(line, -1, axis=0) - line
+            for x, y in ts:
+                angle = n.arctan2(y, x)
+                angles.append(angle)
+        return angles
+
+    def get_extrema_heights(self, mod=True):
+        '''Returns a list of heights at extrema, optionally normed
+        (taking the abs value).'''
+        maxima_heights = [self.func(*maximum) for maximum in self.maxima]
+        minima_heights = [self.func(*minimum) for minimum in self.minima]
+        if mod:
+            maxima_heights = [n.abs(height) for height in maxima_heights]
+            minima_heights = [n.abs(height) for height in minima_heights]
+        return maxima_heights + minima_heights
+
+    def get_saddle_heights(self, mod=True):
+        '''Returns a list of heights at saddles, optionally normed
+        (taking the abs value).'''
+        saddle_heights = [self.func(*saddle) for saddle in self.saddles]
+        if mod:
+            saddle_heights = [n.abs(height) for height in saddle_heights]
+        return saddle_heights
+
+    def get_critical_heights(self, mod=True):
+        '''Returns a list of heiths at all extrema.'''
+        return self.get_extrema_heights(mod) + self.get_saddle_heights(mod)
+
     def build_everything(self, including_hessian=False):
         '''
         Build all the arrays and trace all the lines via the various
