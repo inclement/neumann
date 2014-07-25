@@ -854,6 +854,8 @@ class NeumannTracer(object):
         self.graph_built = False
         self.found_domains = False
         self.upsampled_crits = False
+        self.upsampling_canon = False  # True if crits have been replaced
+                                       # through upsamplint
 
         # Containers for upsampled point information
         self.upsample_crits = [(), (), (), ()]
@@ -1030,6 +1032,17 @@ class NeumannTracer(object):
             self.upsample_crits)
         self.upsampled_crits = True
             
+    def make_upsampling_canon(self):
+        if not self.upsampled_crits:
+            self.upsample_critical_points()
+        ups_max, ups_min, ups_sad, ups_deg = self.upsample_crits
+        self.maxima = ups_max
+        self.minima = ups_min
+        self.saddles = ups_sad
+        self.degenerate = ups_deg
+        self.crits = self.upsample_crits
+        self.crits_dict =self.upsample_crits_dict
+        self.upsampling_canon = True
 
     def get_critical_points(self):
         '''Find the critical points, and return (minima, maxima).'''
@@ -1788,7 +1801,7 @@ class NeumannTracer(object):
                     ax.text(pos[0], pos[1],'{:.1f}'.format(area))
 
         legend_entries = []
-        if self.upsample_crits_dict:
+        if self.upsample_crits_dict and not self.upsampling_canon:
             initial_crit_alpha=0.3
         else:
             initial_crit_alpha=1.0
@@ -1814,23 +1827,24 @@ class NeumannTracer(object):
                 legend_entries.append('degenerate')
 
             # And the same for upsampled if they exist
-            if len(upsampled_maxima) > 0:
-                print upsampled_maxima[:, 0], upsampled_maxima[:, 1]
-                ax.scatter(upsampled_maxima[:, 0], upsampled_maxima[:, 1],
-                           60, c='r')
-                legend_entries.append('upsampled maxima')
-            if len(upsampled_minima) > 0:
-                ax.scatter(upsampled_minima[:, 0], upsampled_minima[:, 1],
-                           60, c='b')
-                legend_entries.append('upsampled minima')
-            if len(upsampled_saddles) > 0:
-                ax.scatter(upsampled_saddles[:, 0], upsampled_saddles[:, 1],
-                           60, color='yellow')
-                legend_entries.append('saddles')
-            if len(upsampled_degenerate) > 0:
-                ax.scatter(upsampled_degenerate[:, 0],upsampled_degenerate[:, 1],
-                           c='orange')
-                legend_entries.append('upsampled degenerate')
+            if not self.upsampling_canon:
+                if len(upsampled_maxima) > 0:
+                    print upsampled_maxima[:, 0], upsampled_maxima[:, 1]
+                    ax.scatter(upsampled_maxima[:, 0], upsampled_maxima[:, 1],
+                               60, c='r')
+                    legend_entries.append('upsampled maxima')
+                if len(upsampled_minima) > 0:
+                    ax.scatter(upsampled_minima[:, 0], upsampled_minima[:, 1],
+                               60, c='b')
+                    legend_entries.append('upsampled minima')
+                if len(upsampled_saddles) > 0:
+                    ax.scatter(upsampled_saddles[:, 0], upsampled_saddles[:, 1],
+                               60, color='yellow')
+                    legend_entries.append('saddles')
+                if len(upsampled_degenerate) > 0:
+                    ax.scatter(upsampled_degenerate[:, 0],upsampled_degenerate[:, 1],
+                               c='orange')
+                    legend_entries.append('upsampled degenerate')
                 
 
         if show_domain_patches:
