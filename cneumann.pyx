@@ -363,3 +363,21 @@ def critical_points_to_index_dict(crits):
     for entry in degenerate:
         d[tuple(entry)] = 'degenerate'
     return d
+
+cpdef hessian(func, double x, double y, double dx, double dy):
+    cdef tuple grads
+    grads = grad(func, x, y, dx, dy)
+    dfdx = grads[0]
+    dfdy = grads[1]
+
+    dfdxdx = (grad(func, x+0.05*dx, y, dx, dy)[0] - dfdx) / (0.05*dx)
+    dfdydy = (grad(func, x, y+0.05*dy, dx, dy)[1] - dfdy) / (0.05*dy)
+    dfdxdy = (grad(func, x+0.05*dx, y, dx, dy)[1] - dfdy) / (0.05*dx)
+    dfdydx = (grad(func, x, y+0.05*dy, dx, dy)[0] - dfdx) / (0.05*dy)
+
+    return n.array([[dfdxdx, dfdxdy], [dfdydx, dfdydy]])
+
+cpdef hessian_det(func, double x, double y, double dx, double dy):
+    cdef double [:, :] hess_mat
+    hess_mat = hessian(func, x, y, dx, dy)
+    return hess_mat[1, 1] * hess_mat[0, 0] - hess_mat[0, 1] * hess_mat[1, 0]

@@ -1281,7 +1281,7 @@ class NeumannTracer(object):
                                     self.sy+entry[1]*self.dy),
                    self.arr[entry[0], entry[1]])
 
-    def make_hessian_array(self):
+    def make_hessian_array(self, compiled=True):
         '''
         Calculate the hessian at every point of self.arr.
         '''
@@ -1290,10 +1290,15 @@ class NeumannTracer(object):
         sx, sy = self.start_point
         dx, dy = self.dr
         xnum, ynum = self.shape
+        if compiled and cneu is not None:
+            hessian_func = cneu.hessian_det
+        else:
+            hessian_func = hessian_det
         for x in range(xnum):
             self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
             for y in range(ynum):
-                arr[x, y] = hessian_det(self.func, sx + x*dx, sy + y*dy, dx, dy)
+                arr[x, y] = hessian_func(self.func, sx + x*dx,
+                                         sy + y*dy, dx, dy)
 
         self.hessian_filled = True
         self.vprint()
