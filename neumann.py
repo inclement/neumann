@@ -257,6 +257,9 @@ from matplotlib import interactive as mpl_interactive
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
+from scipy.spatial import (Voronoi, voronoi_plot_2d,
+                           Delaunay, delaunay_plot_2d)
+
 import random
 import os
 import sys
@@ -1580,6 +1583,24 @@ class NeumannTracer(object):
         self.vprint()
         return grad_arr
 
+    def get_voronoi_diagram(self):
+        if not self.found_crits:
+            self.find_critical_points()
+
+        maxima, minima, saddles, degenerate = self.crits
+        points = maxima + minima + saddles
+        v = Voronoi(n.array(points))
+        return v
+
+    def get_delaunay_diagram(self):
+        if not self.found_crits:
+            self.find_critical_points()
+
+        maxima, minima, saddles, degenerate = self.crits
+        points = maxima + minima + saddles
+        v = Delaunay(n.array(points))
+        return v
+
     def plot(self, show_critical_points=True,
              trace_lines=True, plot_hessian=False,
              show_saddle_directions=False,
@@ -1589,12 +1610,14 @@ class NeumannTracer(object):
              show_sample_directions=False,
              plot_gradients=False,
              plot_nearby_gradients=False,
+             plot_delaunay=False,
+             plot_reduced_delaunay=False,
              save=False, figax=None,
              maxima_style=maxima_style_old,  # Defined near top of file
              minima_style=minima_style_old,
              saddle_style = saddle_style_rami,
              interpolation='none',
-             cmap='Spectral_r'):
+             cmap='RdYlBu_r'):
         '''
         Plot and return a graph showing (optionally):
         - Neumann lines
@@ -1784,6 +1807,35 @@ class NeumannTracer(object):
 
         self.figax = (fig, ax)
 
+        if plot_delaunay:
+            d = self.get_delaunay_diagram()
+            from matplotlib import tri
+            tri.triplot(ax, d.points[:, 0], d.points[:, 1], color='green', linewidth=1.5)
+
+        if plot_reduced_delaunay:
+            d = self.get_delaunay_diagram()
+            points = d.points
+            vertices = d.simplices
+            triangles = points[vertices]
+            cd = self.crits_dict
+            for triangle in triangles:
+                triangle = triangle.astype(n.int64)
+                types = [cd[tuple(triangle[i])] for i in range(3)]
+                print 'triangle is', triangle
+                print 'types are', types
+                for i in range(3):
+                    current_points = n.roll(triangle, i)[:2]
+                    current_types = n.roll(types, i)[:2]
+                    print 'current', current_types
+                    if ((current_types[0] == 'saddle' and current_types[1] == 'saddle') or
+                        ('maximum' in current_types and 'minimum' in current_types)):
+                        print 'not plotting'
+                        pass
+                    else:
+                        print 'plotting', i
+                        print [tuple(row) for row in current_points]
+                        ax.plot(current_points[:, 0], current_points[:, 1], color='green')
+
 
         if show_saddle_directions:
             saddles = self.saddles
@@ -1826,6 +1878,7 @@ class NeumannTracer(object):
         - Hessian eigenvectors at detected saddles
         - Coloured patches representing each closed Neumann domain
 
+        This is a WIP (and doesn't really work right now)
         '''
 
         try:
