@@ -825,7 +825,7 @@ class NeumannTracer(object):
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
                  start_point=(0.00123, 0.00123), to_edges=False,
-                 upsample=5, verbose=True,
+                 upsample=5, verbose=True, isolate_gradients=20,
                  func_params=()):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
@@ -840,12 +840,15 @@ class NeumannTracer(object):
         self.sx = start_point[0]
         self.sy = start_point[1]
         self.upsample = upsample
+        self.isolate_gradients = isolate_gradients  # precision for max grad change check
 
         self.func_params = func_params
 
         self.to_edges = to_edges
 
         self.verbose = verbose
+
+        self.isolated_saddles = []
 
         self.arr_filled = False
         self.found_crits = False
@@ -1076,7 +1079,6 @@ class NeumannTracer(object):
             minima_done[j] = False
             distances.append(dist)
         return distances
-
     def critical_point_proximity_alert(self):
         pass
 
@@ -1136,12 +1138,94 @@ class NeumannTracer(object):
         saddles = [tuple(c) for c in saddles]
         self.crits = maxima, minima, saddles, degenerate
 
+    def gradient_directions_around_saddle(self, saddle, jump, samples=10):
+        '''Returns the 4 directions of maximal gradient from the given saddle
+        point, from a sampling at the given jump distance.
+        '''
+        print '------'
+        sx, sy = self.start_point
+        cx, cy = saddle
+        dx, dy = self.dr
+        heights = n.zeros(samples)
+        func = self.func
+        angles = n.linspace(0, 2*n.pi, samples+1)[:-1]
+        print 'params', saddle, jump
+        for index, angle in enumerate(angles):
+            jx = sx + cx*dx + jump * n.cos(angle)
+            jy = sy + cy*dy + jump * n.sin(angle)
+            height = func(jx, jy)
+            heights[index] = height
+
+        heights -= func(sx + cx*dx, sy + cy*dy)
+        print 'heights are', heights
+        print 'func in centre is', func(sx + cx*dx, sy + cy*dy)
+
+        # check sign changes 4 times
+        changes = 0
+        for index, height in enumerate(heights):
+            cur = heights[index]
+            nex = heights[(index+1) % samples]
+            if n.sign(cur) != n.sign(nex):
+                changes += 1
+
+        if changes != 4:
+            print 'changes is', changes
+            print '------'
+            return None
+
+        cut = int(0.25*samples)
+
+        imax = n.argmax(heights)
+        ibefore = imax - cut
+        iafter = imax + cut
+        print 'max', imax, ibefore, iafter
+        # iothermax = (iafter % samples) + n.argmax(n.hstack(
+        #     [heights[(iafter % samples):], heights[(ibefore % samples):]]))
+        if iafter >= samples or ibefore < 0:
+            iothermax = (iafter % samples) + n.argmax(
+                heights[(iafter % samples):(ibefore % samples)])
+        else:
+            iothermax = (iafter % samples) + n.argmax(n.hstack(
+                [heights[iafter:], heights[:ibefore]]))
+        iothermax %= samples
+        print 'othermax', iothermax 
+        print 'max heights', heights[imax], heights[iothermax]
+
+        imin = n.argmin(heights)
+        ibefore = imin - cut
+        iafter = imin + cut
+        print 'min', imin, ibefore, iafter
+        if iafter >= samples or ibefore < 0:
+            iothermin = (iafter % samples) + n.argmin(
+                heights[(iafter % samples):(ibefore % samples)])
+        else:
+            iothermin = (iafter % samples) + n.argmin(n.hstack(
+                [heights[iafter:], heights[:ibefore]]))
+        iothermin %= samples
+        print 'othermin', iothermin
+        print 'min heights', heights[imin], heights[iothermin]
+
+        print 'indices', imax, iothermax, imin, iothermin
+        print angles[imax]
+        print angles[imin]
+        print angles[iothermax]
+        print angles[iothermin]
+
+        return sorted(((1.0, angles[imax]), (-1.0, angles[imin]),
+                      (1.0, angles[iothermax]), (-1.0, angles[iothermin])),
+                      key=lambda j: j[1])
+                                           
+        
+
     def trace_neumann_lines(self, compiled=True):
         '''For every saddle in self.crits, drop 4 Neumann lines at the points
         of adjacent sign change, each gradient ascending/descending
         appropriately until they hit another critical point or appear
         to have stopped. The resulting lines are stored in self.lines.
 
+        If isolate_gradients > 4, the function samples extra points around
+        the saddle to find the optimal places to start tracing the gradient.
+        This is also performed (by necessity) if upsampling is canon.
         '''
         if not self.arr_filled:
             self.fill_arr()
@@ -1157,6 +1241,9 @@ class NeumannTracer(object):
 
         arr = self.arr
 
+        isolate_gradients = self.isolate_gradients
+        isolated_saddles = []
+
         curs = 0
         for saddle in self.saddles:
             self.vprint('\r\tCurrent saddle {0} / {1}'.format(
@@ -1164,6 +1251,7 @@ class NeumannTracer(object):
             curs += 1
 
             saddlex, saddley = saddle
+            print 'saddle is', saddlex, saddley
             if saddlex % 2 == 0:
                 ais = even_adj_indices.copy()
             else:
@@ -1173,6 +1261,7 @@ class NeumannTracer(object):
             ais[:, 1] += saddley
 
             val = arr[saddlex, saddley]
+            print 'val is', val
             adjs = n.zeros(6, dtype=n.float64)
             for i in range(6):
                 adjs[i] = arr[ais[i][0] % self.xnum, ais[i][1] % self.ynum]
@@ -1182,17 +1271,40 @@ class NeumannTracer(object):
             adjs = adjs - val
 
             # Find tracing start points
-            # Original algorithm just uses sign changes...is there a better way?
             tracing_start_points = []
-            current_region_angles = []
-            for i in range(6):
-                cur_adj = adjs[i]
-                next_adj = adjs[(i+1) % 6]
-                current_region_angles.append(n.arctan2(ais[i][1]-saddley,
-                                                       ais[i][0]-saddlex))
-                if n.sign(next_adj) != n.sign(cur_adj):
-                    sign = n.sign(cur_adj)
-                    tracing_start_points.append([sign, ais[i]])
+            if isolate_gradients or self.upsampling_canon:
+                jump_frac = 1.1
+                jump = jump_frac*self.dx/(
+                    float(self.upsample) if self.upsampling_canon else 1.)
+                tracing_start_points = self.gradient_directions_around_saddle(
+                    (saddlex, saddley), jump,
+                    isolate_gradients)
+                print '!!!'
+                print 'tsps are', tracing_start_points
+                print '!!!'
+                if tracing_start_points is not None:
+                    # tracing_start_points = sorted(tracing_start_points,
+                    #                               key=lambda j: j[1])
+                    tracing_start_points = [
+                        (sign, (saddle[0] + jump_frac*n.cos(angle),
+                                saddle[1] + jump_frac*n.sin(angle))) for
+                        sign, angle in tracing_start_points]
+                    print 'modified tsps are', tracing_start_points
+                    print 'from saddle', saddle
+            if not tracing_start_points:
+                tracing_start_points = []
+                current_region_angles = []
+                print 'adjs are', adjs
+                for i in range(6):
+                    cur_adj = adjs[i]
+                    next_adj = adjs[(i+1) % 6]
+                    current_region_angles.append(n.arctan2(ais[i][1]-saddley,
+                                                           ais[i][0]-saddlex))
+                    if n.sign(next_adj) != n.sign(cur_adj):
+                        sign = n.sign(cur_adj)
+                        tracing_start_points.append([sign, ais[i]])
+            else:
+                isolated_saddles.append(saddle)
 
             for coords in tracing_start_points:
                 sign, coords = coords
@@ -1261,6 +1373,7 @@ class NeumannTracer(object):
 
         self.vprint()
         self.crits_dict = critical_points_to_index_dict(self.crits)
+        self.isolated_saddles = isolated_saddles
         self.traced_lines = True
 
     def print_critical_heights(self):
@@ -1576,6 +1689,12 @@ class NeumannTracer(object):
         '''Returns a list of heiths at all extrema.'''
         return self.get_extrema_heights(mod) + self.get_saddle_heights(mod)
 
+    def get_neumann_gradients(self, along_line=True, mod=True):
+        '''Returns (very approximate) height gradients along the lines.'''
+        if not self.traced_lines:
+            self.trace_neumann_lines()
+        lines = self.lines
+
     def build_everything(self, including_hessian=False):
         '''
         Build all the arrays and trace all the lines via the various
@@ -1680,6 +1799,7 @@ class NeumannTracer(object):
              plot_nearby_gradients=False,
              plot_delaunay=False,
              plot_reduced_delaunay=False,
+             highlight_isolated_saddles=False,
              save=False, figax=None,
              maxima_style=maxima_style_old,  # Defined near top of file
              minima_style=minima_style_old,
@@ -1749,6 +1869,7 @@ class NeumannTracer(object):
         else:
             fig, ax = figax
             ax.clear()
+        fig.show()
 
         if not show_domain_patches:
             ax.imshow(plotarr, cmap=cmap, interpolation='none',
@@ -1845,6 +1966,10 @@ class NeumannTracer(object):
                     ax.scatter(upsampled_degenerate[:, 0],upsampled_degenerate[:, 1],
                                c='orange')
                     legend_entries.append('upsampled degenerate')
+
+        if self.isolated_saddles and highlight_isolated_saddles:
+            isols = n.array(self.isolated_saddles)
+            ax.scatter(isols[:, 0], isols[:, 1], 200, color='black', alpha=0.2)
                 
 
         if show_domain_patches:
