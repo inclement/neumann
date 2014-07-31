@@ -869,6 +869,7 @@ class NeumannTracer(object):
         self.igraph = None
 
         self.lines = []
+        self.noncanon_lines = []
         self.start_points = []
         self.end_points = []
         self.extra_lines = []
@@ -984,9 +985,9 @@ class NeumannTracer(object):
         new_dy = dy / upsample
 
         for i, crit in enumerate(maxima + minima + saddles):
-            if i % 5 == 0:
-                self.vprint('Upsampling critical point {} / {}'.format(
-                    i, len(maxima) + len(minima) + len(saddles)))
+            if i % 20 == 0:
+                self.vprint('\r\tUpsampling critical point {} / {}'.format(
+                    i, len(maxima) + len(minima) + len(saddles)), False)
             mx, my = crit
             rx = self.start_point[0] + mx*dx
             ry = self.start_point[1] + my*dy
@@ -1046,6 +1047,9 @@ class NeumannTracer(object):
         self.crits = self.upsample_crits
         self.crits_dict =self.upsample_crits_dict
         self.upsampling_canon = True
+        self.noncanon_lines = self.lines
+        self.lines = []
+        self.traced_lines = False
 
     def get_critical_points(self):
         '''Find the critical points, and return (minima, maxima).'''
@@ -1350,7 +1354,7 @@ class NeumannTracer(object):
 
                 if len(points) > 4:
                     points = points[4:]
-                else:
+                elif len(points) < 4:
                     points = points[-1:]
                 points = [saddle] + points
 
@@ -1800,6 +1804,7 @@ class NeumannTracer(object):
              plot_delaunay=False,
              plot_reduced_delaunay=False,
              highlight_isolated_saddles=False,
+             show_noncanon_lines=True,
              save=False, figax=None,
              maxima_style=maxima_style_old,  # Defined near top of file
              minima_style=minima_style_old,
@@ -1977,14 +1982,17 @@ class NeumannTracer(object):
         else:
             ax.contour(plotarr, levels=[0], alpha=0.2)
 
+        if show_noncanon_lines:
+            for line in self.noncanon_lines:
+                segs = sanitise_line(line)
+                for seg in segs:
+                    ax.plot(seg[:, 0], seg[:, 1],'-', color='green', alpha=0.5)
         if trace_lines:
             for line in self.lines:
                 segs = sanitise_line(line)
-                # if len(segs) > 0:
-                #     print len(segs), map(len, segs),'segs are', segs
-                for seg in segs: #filter(lambda j: len(j)==1, segs):
+                for seg in segs:
                     ax.plot(seg[:, 0], seg[:, 1],'-', color='purple')
-                #ax.plot(line[:, 0], line[:, 1],'-', color='purple')
+
 
         if show_sample_directions:
             for line in self.extra_lines:
