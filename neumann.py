@@ -317,15 +317,19 @@ class CriticalGraph(dict):
     dict setting.
 
     '''
-    def __init__(self, xnum=0, ynum=0, *args):
+    def __init__(self, xnum=0, ynum=0, dr=1.0, *args):
         '''Arguments xnum and ynum should be the array size in each direction,
         and are used when calculating angles between critical
         points.
+
+        dr is the length normalisation, applied when retrieving any
+        distance quantity.
 
         '''
         super(CriticalGraph, self).__init__(*args)
         self.xnum = xnum
         self.ynum = ynum
+        self.dr = dr  # Assumes equal dx, dy!
         self.nodes_aligned = False
         self.closed_domains = []
         self.got_closed_domains = False
@@ -546,7 +550,7 @@ class CriticalGraph(dict):
         print # Lineprint newline
         return diameters
 
-    def get_domain_rhos(self):
+    def get_domain_rhos(self, eigenvalue=None):
         domains = self.get_closed_domains()
         rhos = []
         i = 0
@@ -557,6 +561,9 @@ class CriticalGraph(dict):
             rho = domain.rho()
             rhos.append(rho)
         print  # Lineprint newline
+        if eigenvalue is not None:
+            root_eig = n.sqrt(eigenvalue)
+            rhos = [rho * root_eig for rho in rhos]
         return rhos
 
     def get_domain_from(self, line, dir='clockwise'):
@@ -594,7 +601,7 @@ class CriticalGraph(dict):
             lines.append(curline)
             start = curline.start
             end = curline.end
-        return NeumannDomain(lines)
+        return NeumannDomain(lines, self.dr)
 
     def get_crit_degree_dists(self):
         '''Returns the dimension (number of lines going in/out) of each
@@ -633,9 +640,12 @@ class NeumannDomain(object):
     NeumannLines. Also stores the number of saddles, maxima and minima
     participating in the domain.
 
+    Argument dr is the normalisation for distance.
+
     '''
-    def __init__(self, lines):
+    def __init__(self, lines, dr=1.0):
         self.lines = lines
+        self.dr = dr
         maxima, minima, saddles = 0, 0, 0
         for line in lines:
             start = line.start_type
@@ -719,17 +729,18 @@ class NeumannDomain(object):
         return vertex_set
 
     def area(self):
-        return area_from_border(self.as_sanitised_curve())
+        return area_from_border(self.as_sanitised_curve()) * self.dr**2
 
     def perimeter(self):
         points = self.as_sanitised_curve()
         diffs = n.roll(points,-1,axis=0) - points
-        return n.sum(n.sqrt(n.sum(diffs*diffs,axis=1)))
+        return n.sum(n.sqrt(n.sum(diffs*diffs,axis=1))) * self.dr
 
     def rho(self):
         return self.area() / self.perimeter()
 
     def crude_area(self):
+        '''Crude and slow...do not use!'''
         return crude_area_from_border([line.points for line in self.lines])
 
     def __str__(self):
@@ -821,12 +832,13 @@ class NeumannTracer(object):
     * func_params: This may be used to pass extra information about the function,
                    which may let cython be quicker. Right now supports only a tuple of
                    the form "('rwm', wvs, amplitudes, phases)"
+    * eigenvalue: the energy of the current eigenvalue, used to normalise rho
 
     '''
     def __init__(self, xnum, ynum, dx, dy, func,
                  start_point=(0.00123, 0.00123), to_edges=False,
                  upsample=5, verbose=True, isolate_gradients=20,
-                 func_params=()):
+                 func_params=(), eigenvalue=1.0):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.xnum = xnum
@@ -841,6 +853,7 @@ class NeumannTracer(object):
         self.sy = start_point[1]
         self.upsample = upsample
         self.isolate_gradients = isolate_gradients  # precision for max grad change check
+        self.eigenvalue = eigenvalue
 
         self.func_params = func_params
 
@@ -864,7 +877,7 @@ class NeumannTracer(object):
         self.upsample_crits = [(), (), (), ()]
         self.upsample_crits_dict = {}
 
-        self.graph = CriticalGraph(xnum, ynum)
+        self.graph = CriticalGraph(xnum, ynum, self.dx)
         self.domains = []
         self.igraph = None
 
@@ -1652,7 +1665,7 @@ class NeumannTracer(object):
     def get_domain_rhos(self):
         if not self.graph_built:
             self.build_graph()
-        return self.graph.get_domain_rhos()
+        return self.graph.get_domain_rhos(self.eigenvalue)
 
     def get_neumann_heights(self):
         '''Returns a list of heights of all points on detected
@@ -1808,6 +1821,7 @@ class NeumannTracer(object):
              show_saddle_directions=False,
              show_domain_patches=False,
              print_patch_areas=False,
+             print_patch_rhos=False,
              figsize=None,
              show_sample_directions=False,
              plot_gradients=False,
@@ -1937,6 +1951,11 @@ class NeumannTracer(object):
                     patch_areas = map(area_from_border, ps)
                     pos = n.average(ps[n.argmax(patch_areas)], axis=0)
                     ax.text(pos[0], pos[1],'{:.1f}'.format(area))
+                if print_patch_rhos:
+                    rho = domain.rho() * n.sqrt(self.eigenvalue)
+                    patch_areas = map(area_from_border, ps)
+                    pos = n.average(ps[n.argmax(patch_areas)], axis=0)
+                    ax.text(pos[0], pos[1],'{:.3f}'.format(rho))
 
         legend_entries = []
         if self.upsample_crits_dict and not self.upsampling_canon:
@@ -2680,7 +2699,7 @@ def area_from_border(lines):
     for i in range(len(lines)):
         area += (lines[i, 0]*lines[(i+1) % num, 1] -
                  lines[i, 1]*lines[(i+1) % num, 0])
-    return n.abs(area/2.)
+    return n.abs(area / 2.)
 
 sanitised_domains = []
 def sanitise_domain(ps, shape=None):
@@ -2879,7 +2898,8 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
                            periodicity/(1.*length), periodicity/(1.*length),
                            f,
                            to_edges='periodic', upsample=upsample,
-                           func_params=func_params)
+                           func_params=func_params,
+                           eigenvalue=energy)
     if returnall:
         return tracer, f, d2, length
     return tracer
