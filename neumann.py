@@ -1210,6 +1210,7 @@ class NeumannTracer(object):
         print 'min heights', heights[imin], heights[iothermin]
 
         print 'indices', imax, iothermax, imin, iothermin
+        print 'angles'
         print angles[imax]
         print angles[imin]
         print angles[iothermax]
@@ -1255,6 +1256,7 @@ class NeumannTracer(object):
             curs += 1
 
             saddlex, saddley = saddle
+            print
             print 'saddle is', saddlex, saddley
             if saddlex % 2 == 0:
                 ais = even_adj_indices.copy()
@@ -1278,8 +1280,16 @@ class NeumannTracer(object):
             tracing_start_points = []
             if isolate_gradients or self.upsampling_canon:
                 jump_frac = 1.1
-                jump = jump_frac*self.dx/(
-                    float(self.upsample) if self.upsampling_canon else 1.)
+                print 'integer?', saddlex, saddley, nearly_integer(saddlex), nearly_integer(saddley)
+                if nearly_integer(saddlex) and nearly_integer(saddley):
+                    # Probably could do a real int check but lets be safe
+                    jump = jump_frac * self.dx
+                    print 'jump is', jump, self.dx
+                    print 'nearly integer', saddlex, saddley
+                else:
+                    jump = jump_frac*self.dx/(
+                        float(self.upsample) if self.upsampling_canon else 1.)
+                    print 'jump is', jump, self.dx
                 tracing_start_points = self.gradient_directions_around_saddle(
                     (saddlex, saddley), jump,
                     isolate_gradients)
@@ -1310,6 +1320,7 @@ class NeumannTracer(object):
             else:
                 isolated_saddles.append(saddle)
 
+            print 'tracing_start_points are', tracing_start_points
             for coords in tracing_start_points:
                 sign, coords = coords
                 if sign == 1.0:
@@ -1802,6 +1813,7 @@ class NeumannTracer(object):
              plot_gradients=False,
              plot_nearby_gradients=False,
              plot_delaunay=False,
+             plot_voronoi=False,
              plot_reduced_delaunay=False,
              highlight_isolated_saddles=False,
              show_noncanon_lines=True,
@@ -2012,7 +2024,16 @@ class NeumannTracer(object):
         if plot_delaunay:
             d = self.get_delaunay_diagram()
             from matplotlib import tri
-            tri.triplot(ax, d.points[:, 0], d.points[:, 1], color='green', linewidth=1.5)
+            tri.triplot(ax, d.points[:, 0], d.points[:, 1], color='green',
+                        linewidth=1.5)
+
+        if plot_voronoi:
+            print 'WARNING: Voronoi plot doesn\'t, will just plot Delaunay.'''
+            # Fix this!
+            d = self.get_voronoi_diagram()
+            from matplotlib import tri
+            tri.triplot(ax, d.points[:, 0], d.points[:, 1], color='red',
+                        linewidth=1.5)
 
         if plot_reduced_delaunay:
             d = self.get_delaunay_diagram()
@@ -2029,14 +2050,17 @@ class NeumannTracer(object):
                     current_points = n.roll(triangle, i)[:2]
                     current_types = n.roll(types, i)[:2]
                     print 'current', current_types
-                    if ((current_types[0] == 'saddle' and current_types[1] == 'saddle') or
-                        ('maximum' in current_types and 'minimum' in current_types)):
+                    if ((current_types[0] == 'saddle' and
+                         current_types[1] == 'saddle') or
+                        ('maximum' in current_types and
+                         'minimum' in current_types)):
                         print 'not plotting'
                         pass
                     else:
                         print 'plotting', i
                         print [tuple(row) for row in current_points]
-                        ax.plot(current_points[:, 0], current_points[:, 1], color='green')
+                        ax.plot(current_points[:, 0], current_points[:, 1],
+                                color='green')
 
 
         if show_saddle_directions:
@@ -2934,6 +2958,10 @@ def get_domain_statistics_at(scales, domains=1000, downscale=3):
             degree_dists /= degree_dists[0, 0] / 2.
 
     return results
+
+def nearly_integer(v, cutoff=0.0001):
+    diff = n.abs(int(v) - v)
+    return True if diff < cutoff else False
 
 def get_degree_statistics(scale=65, downscale=7, runs=100):
     threes = []
