@@ -256,6 +256,7 @@ from colorsys import hsv_to_rgb
 from matplotlib import interactive as mpl_interactive
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
+from matplotlib.cm import jet
 
 from scipy.spatial import (Voronoi, voronoi_plot_2d,
                            Delaunay, delaunay_plot_2d)
@@ -669,7 +670,7 @@ class NeumannDomain(object):
         if len(crits) != 2:
             return None  # Domain detected incorrectly!
         else:
-            return mag(n.array(crits[1]) - n.array(crits[0]))
+            return mag(n.array(crits[1]) - n.array(crits[0])) * self.dr
 
     def as_closed_curve(self):
         '''Joins the component lines and returns a single 2d array of points
@@ -838,7 +839,8 @@ class NeumannTracer(object):
     def __init__(self, xnum, ynum, dx, dy, func,
                  start_point=(0.00123, 0.00123), to_edges=False,
                  upsample=5, verbose=True, isolate_gradients=20,
-                 func_params=(), eigenvalue=1.0):
+                 func_params=(), eigenvalue=1.0,
+                 area_constraint=None):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.xnum = xnum
@@ -856,6 +858,8 @@ class NeumannTracer(object):
         self.eigenvalue = eigenvalue
 
         self.func_params = func_params
+
+        self.area_constraint = area_constraint
 
         self.to_edges = to_edges
 
@@ -1820,6 +1824,8 @@ class NeumannTracer(object):
              trace_lines=True, plot_hessian=False,
              show_saddle_directions=False,
              show_domain_patches=False,
+             constrain_patch_rhos=None,
+             colour_patches_by_rho=False,
              print_patch_areas=False,
              print_patch_rhos=False,
              figsize=None,
@@ -1926,11 +1932,22 @@ class NeumannTracer(object):
 
         if show_domain_patches:
             for domain in self.domains:
-                colour = hsv_to_rgb(n.random.random(), 1., 1.)
+
+                if colour_patches_by_rho:
+                    rho = domain.rho() * n.sqrt(self.eigenvalue)
+                    colour = jet(rho / 1.3)[:3]
+                    alpha = 0.95
+                else:
+                    colour = hsv_to_rgb(n.random.random(), 1., 1.)
+                    alpha = 0.7
                 ps = domain.as_closed_curves()
+                cpr = constrain_patch_rhos
+                if (cpr is not None and not
+                    cpr[0] < domain.rho() * n.sqrt(self.eigenvalue) < cpr[1]):
+                    continue
                 for p in ps:
                     if len(ps) > 1:
-                        patch = Polygon(p, alpha=1.0,
+                        patch = Polygon(p, alpha=alpha,
                                         closed=True,
                                         color=colour,
                                         # linestyle=n.random.choice(
@@ -1938,7 +1955,7 @@ class NeumannTracer(object):
                                         linewidth=2,
                                         )
                     else:
-                        patch = Polygon(p, alpha=0.7,
+                        patch = Polygon(p, alpha=alpha,
                                         closed=True,
                                         color=colour,
                                         # linestyle=n.random.choice(
@@ -2299,7 +2316,7 @@ def get_filled_array(xnum, ynum, dx, dy, func, start_point=(0.0, 0.0)):
 
 def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
                         critdict, start_point, direction, to_edges,
-                        func_params=()):
+                        func_params=(), area_constraint=None):
     '''Trace gradient (Neumann) line at point until reaching a critical point.
     func_params is ignored by this python implementation (but may be used by cython).
     '''
@@ -2338,7 +2355,9 @@ def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
         #         cy -= 0.5*n.sin(angle)
         points.append([cx, cy])
 
-        if cx < 0 or cx > xnum or cy < 0 or cy > ynum:
+        if (area_constraint is not None and not area_constraint(cx, cy)):
+            return (points, None)
+        elif cx < 0 or cx > xnum or cy < 0 or cy > ynum:
             if to_edges in ['periodic']:
                 cx %= xnum
                 cy %= ynum
@@ -2903,6 +2922,23 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
     if returnall:
         return tracer, f, d2, length
     return tracer
+
+def stadium_constraint(square_width, circle_radius, x, y):
+    '''Returns True if x, y in the desymmetrised stadium with given
+    parameters, else False.'''
+    if x < 0 or x > square_width + circle_radius:
+        return False
+    if 0 <= x <= square_width and 0 <= y <= circle_radius:
+        return True
+    if square_width <= x <= (square_width + circle_radius):
+        return True if 0 <= y <= (
+            n.sqrt(circle_radius**2 - (x - square_width)**2)) else False
+    return False
+
+def get_stadium_constraint(square_width, circle_radius):
+    '''Returns a stadium constraint function for square with the given
+    width and height from the circle radius.'''
+    return partial(stadium_constraint, square_width, circle_radius)
 
 def save_domain_results_at(scales, domains=1000, downscale=3,
                            filen='neumann_results'):
