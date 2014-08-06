@@ -1356,7 +1356,8 @@ class NeumannTracer(object):
                     self.func, self.crits_dict,
                     self.start_point,
                     direction, self.to_edges,
-                    func_params=self.func_params)
+                    func_params=self.func_params,
+                    area_constraint=self.area_constraint)
 
                 # Check here whether the line has gone in totally the
                 # wrong direction. Try a simple retest if so.
@@ -1897,16 +1898,17 @@ class NeumannTracer(object):
         upsampled_saddles = n.array(upsampled_saddles)
         upsampled_degenerate = n.array(upsampled_degenerate)
 
-        if figax is None:
-            if self.figax[0] is not None and self.figax[1] is not None:
-                fig, ax = self.figax
-                ax.clear()
-            else:
-                fig, ax = plt.subplots()
-        else:
-            fig, ax = figax
-            ax.clear()
-        fig.show()
+        fig, ax = plt.subplots()
+        # if figax is None:
+        #     if self.figax[0] is not None and self.figax[1] is not None:
+        #         fig, ax = self.figax
+        #         ax.clear()
+        #     else:
+        #         fig, ax = plt.subplots()
+        # else:
+        #     fig, ax = figax
+        #     ax.clear()
+        # fig.show()
 
         if not show_domain_patches:
             ax.imshow(plotarr, cmap=cmap, interpolation='none',
@@ -2926,6 +2928,7 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
 def stadium_constraint(square_width, circle_radius, x, y):
     '''Returns True if x, y in the desymmetrised stadium with given
     parameters, else False.'''
+    print 'stadium', square_width, circle_radius, x, y
     if x < 0 or x > square_width + circle_radius:
         return False
     if 0 <= x <= square_width and 0 <= y <= circle_radius:
@@ -2939,6 +2942,40 @@ def get_stadium_constraint(square_width, circle_radius):
     '''Returns a stadium constraint function for square with the given
     width and height from the circle radius.'''
     return partial(stadium_constraint, square_width, circle_radius)
+
+def get_stadium_tracer(square_width, circle_radius, coefficients):
+    func = get_stadium_mode(coefficients)
+    tracer = NeumannTracer(200, 200, 0.01, 0.005, func)
+    xnum, ynum = tracer.shape
+    dx, dy = tracer.dr
+    sx, sy = tracer.start_point
+    new_square_width = (square_width - sx) / dx
+    new_circle_radius = circle_radius / dx
+    tracer.area_constraint = get_stadium_constraint(new_square_width,
+                                                    new_circle_radius)
+    extremum = n.max((n.max(tracer.arr), n.abs(n.min(tracer.arr))))
+    tracer.arr[0][-1] = extremum
+    tracer.arr[0][-2] = -1*extremum
+    return tracer
+
+def get_stadium_tracer_from_file(number):
+    import json
+    with open('/home/asandy/neumann/stadium_mode_amplitudes.json',
+              'r') as fileh:
+        coeffs = json.load(fileh)[number]
+    return get_stadium_tracer(1., 1., coeffs)
+    
+def get_stadium_mode(coefficients, prefactor=1.):
+    assert len(coefficients) == 50
+    k = 1.
+    coefficients = n.array(coefficients)
+    def func(x, y):
+        angles = n.pi / 50. * (coefficients - 0.5)
+        components = (coefficients *
+                      n.cos(k * n.cos(angles) * x) *
+                      n.cos(k * n.sin(angles) * y))
+        return prefactor * n.sum(components)
+    return func
 
 def save_domain_results_at(scales, domains=1000, downscale=3,
                            filen='neumann_results'):
