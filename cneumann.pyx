@@ -170,13 +170,16 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                           double xnum, double ynum, func,
                           dict critdict, double [:] start_point,
                           bytes direction, to_edges,
-                          tuple func_params=()):
+                          tuple func_params=(),
+                          area_constraint=None):
     '''Traces the line of maximal gradient from the given position until
     reaching a critical point or until not really moving any more.'''
 
     cdef bint to_edges_bool = 1 if to_edges else 0  # to_edges can
                                                     # effectively only be
                                                     # true/false
+
+    cdef bint_area_constraint = 1 if area_constraint is not None else 0
 
     cdef long ixnum = <long>xnum, iynum = <long>ynum
     cdef double cx = sx, cy = sy
@@ -221,7 +224,10 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
 
         points.append([cx, cy])
 
-        if cx < 0 or cx > xnum or cy < 0 or cy > ynum:
+        if bint_area_constraint:
+            if not area_constraint(cx, cy):
+                return (points, None)
+        elif cx < 0 or cx > xnum or cy < 0 or cy > ynum:
             if to_edges_bool:
                 cx %= xnum
                 cy %= ynum
@@ -381,3 +387,25 @@ cpdef hessian_det(func, double x, double y, double dx, double dy):
     cdef double [:, :] hess_mat
     hess_mat = hessian(func, x, y, dx, dy)
     return hess_mat[1, 1] * hess_mat[0, 0] - hess_mat[0, 1] * hess_mat[1, 0]
+
+
+cpdef hermite(int n, double x):
+    '''Computes the hermite polynomial with given n, at x'''
+    cdef double h0 = 1
+    cdef double h1 = 2*x
+    cdef int i = 1
+    cdef double prev, cur, new
+
+    if n == 0:
+        return h0
+    elif n == 1:
+        return h1
+    else:
+        cur = h1
+        prev = h0
+        while i < n:
+            new = 2*x*cur - 2*i*prev
+            prev = cur
+            cur = new
+            i += 1
+    return new

@@ -260,6 +260,7 @@ from matplotlib.cm import jet
 
 from scipy.spatial import (Voronoi, voronoi_plot_2d,
                            Delaunay, delaunay_plot_2d)
+from scipy.misc import factorial
 
 import random
 import os
@@ -2605,7 +2606,7 @@ sign_permutations = set(chain(permutations([1, 1]),
                               permutations([1, -1]),
                               permutations([-1, -1])))
 def periodic_random_wave_function(energy, seed=0, returnall=False,
-                                  compiled=True):
+                                  compiled=True, spectrum='shell'):
     if seed == 0:
         seed = n.random.randint(100000000)
 
@@ -2616,16 +2617,36 @@ def periodic_random_wave_function(energy, seed=0, returnall=False,
     amps = []
     phases = []
 
-    possible_wvs = duofactors(energy)
-    if len(possible_wvs) == 0:
-        raise Exception('Energy must be a sum of two squares.')
-    for wv in possible_wvs:
-        for permutation in permutations(wv):
-            for signs in sign_permutations:
-                wvs.append(
-                    [p*q for (p, q) in zip(signs, permutation)])
-                amps.append(generator.normal(0., 1.))
-                phases.append(generator.rand() * 2 * n.pi)
+    if spectrum == 'shell':
+        possible_wvs = duofactors(energy)
+        if len(possible_wvs) == 0:
+            raise Exception('Energy must be a sum of two squares.')
+        for wv in possible_wvs:
+            for permutation in permutations(wv):
+                for signs in sign_permutations:
+                    wvs.append(
+                        [p*q for (p, q) in zip(signs, permutation)])
+                    amps.append(generator.normal(0., 1.))
+                    phases.append(generator.rand() * 2 * n.pi)
+
+    elif spectrum == 'gaussian':
+        possible_wvs = []
+        for i in range(int(-3.5*energy)-1, int(3.5*energy)):
+            lineprint(
+                'Populating Gaussian spectrum, i = {} from {} -> {}'.format(
+                i, int(-3.5*energy-1), int(3.5*energy)))
+            for j in range(int(-3.5*energy), int(3.5*energy)):
+                if ((i != 0 or j != 0) and
+                    (i % 2 and j % 2)):
+                    wvs.append([i, j])
+                    amps.append(generator.normal(0., energy) *
+                                1/n.sqrt(energy) * n.exp(
+                                    -0.5*(i**2 + j**2)/energy))
+                    phases.append(generator.rand() * 2 * n.pi)
+        print
+                               
+                                               
+                                
 
     wvs = n.array(wvs)
     amps = n.array(amps)
@@ -2894,7 +2915,8 @@ def periodic_animate(scale=5, number=50, frames=200, downscale=2, func=None,
 def get_periodic_tracer(energy, gridsize=None, downscale=2,
                         returnall=False, upsample=5,
                         seed=0, compiled=True,
-                        pass_func_params=True):
+                        pass_func_params=True,
+                        spectrum='shell'):
     '''Returns a :class:`NeumannTracer` covering the periodic domain of a
     torus with the given scale and number of wavevectors.
 
@@ -2909,7 +2931,8 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
     print 'length is', length
     periodicity = 2*n.pi
     f, d2 = periodic_random_wave_function(energy, returnall=True,
-                                          seed=seed, compiled=compiled)
+                                          seed=seed, compiled=compiled,
+                                          spectrum=spectrum)
     if pass_func_params:
         func_params = ('rwm', d2[1].astype(n.double), d2[0].astype(n.double),
                        d2[2].astype(n.double))
@@ -2976,6 +2999,58 @@ def get_stadium_mode(coefficients, prefactor=1.):
                       n.cos(k * n.sin(angles) * y))
         return prefactor * n.sum(components)
     return func
+
+def hermite(n, x):
+    '''Computes the hermite polynomial with given n, at x'''
+    h0 = 1
+    h1 = 2*x
+    i = 1
+
+    if n == 0:
+        return h0
+    elif n == 1:
+        return h1
+    else:
+        cur = h1
+        prev = h0
+        while i < n:
+            new = 2*x*cur - 2*i*prev
+            prev = cur
+            cur = new
+            i += 1
+    return new
+
+def get_random_hermite_mode(energy, adjust=[], seed=0):
+    '''Returns a function of x and y.'''
+    if seed == 0:
+        seed = n.random.randint(10000000)
+    g = n.random.RandomState()
+    g.seed(seed)
+
+    if cneu is not None:
+        hermite_func = cneu.hermite
+    else:
+        hermite_func = hermite
+
+    polys = []
+    everything_prefac = 1/n.sqrt(2**energy)
+    for k in range(0, energy+1):
+        prefac = 1 / n.sqrt(factorial(k)*factorial(energy-k))
+        hx = partial(hermite_func, k)
+        hy = partial(hermite_func, energy-k)
+        polys.append([g.normal() * prefac, hx, hy])
+
+    for index, value in adjust:
+        polys[index][0] = polys[index][0] * value
+
+    def sumfunc(x, y):
+        ans = 0.
+        radial_prefactor = n.exp(-0.5*(x**2 + y**2))
+        for i in range(len(polys)):
+            row = polys[i]
+            ans += row[0] * row[1](x) * row[2](y)
+        return ans * radial_prefactor
+    return n.vectorize(sumfunc)
 
 def save_domain_results_at(scales, domains=1000, downscale=3,
                            filen='neumann_results'):
