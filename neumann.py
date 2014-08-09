@@ -258,8 +258,13 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.cm import jet
 
-from scipy.spatial import (Voronoi, voronoi_plot_2d,
-                           Delaunay, delaunay_plot_2d)
+try:
+    from scipy.spatial import (Voronoi, voronoi_plot_2d,
+                               Delaunay, delaunay_plot_2d)
+    scipy_spatial_import = True
+except ImportError:
+    scipy_spatial_import = False
+    print 'Failed to import Delaunay and Voronoi tools.'
 from scipy.misc import factorial
 
 import random
