@@ -265,6 +265,7 @@ from scipy.misc import factorial
 import random
 import os
 import sys
+import cPickle
 from functools import partial
 
 try:
@@ -514,9 +515,10 @@ class CriticalGraph(dict):
         areas = []
         i = 0
         for domain in domains:
-            lineprint('\rGetting area of domain {} / {}'.format(
-                i, len(domains)),
-                      False)
+            if i % 50 == 0:
+                lineprint('\rGetting area of domain {} / {}'.format(
+                    i, len(domains)),
+                          False)
             i += 1
             area = domain.area()
             areas.append(area)
@@ -528,9 +530,10 @@ class CriticalGraph(dict):
         perimeters = []
         i = 0
         for domain in domains:
-            lineprint('\rGetting perimeter of domain {} / {}'.format(
-                i, len(domains)),
-                      False)
+            if i % 50 == 0:
+                lineprint('\rGetting perimeter of domain {} / {}'.format(
+                    i, len(domains)),
+                          False)
             i += 1
             perimeter = domain.perimeter()
             perimeters.append(perimeter)
@@ -542,9 +545,10 @@ class CriticalGraph(dict):
         diameters = []
         i = 0
         for domain in domains:
-            lineprint('\rGetting diameter of domain {} / {}'.format(
-                i, len(domains)),
-                      False)
+            if i % 50 == 0:
+                lineprint('\rGetting diameter of domain {} / {}'.format(
+                    i, len(domains)),
+                          False)
             i += 1
             diameter = domain.diameter()
             if diameter is not None:
@@ -557,8 +561,9 @@ class CriticalGraph(dict):
         rhos = []
         i = 0
         for domain in domains:
-            lineprint('\rGetting rho of domain %d / %d' % (i, len(domains)),
-                      False)
+            if i % 50 == 0:
+                lineprint('\rGetting rho of domain %d / %d' % (i, len(domains)),
+                          False)
             i += 1
             rho = domain.rho()
             rhos.append(rho)
@@ -1164,14 +1169,12 @@ class NeumannTracer(object):
         '''Returns the 4 directions of maximal gradient from the given saddle
         point, from a sampling at the given jump distance.
         '''
-        print '------'
         sx, sy = self.start_point
         cx, cy = saddle
         dx, dy = self.dr
         heights = n.zeros(samples)
         func = self.func
         angles = n.linspace(0, 2*n.pi, samples+1)[:-1]
-        print 'params', saddle, jump
         for index, angle in enumerate(angles):
             jx = sx + cx*dx + jump * n.cos(angle)
             jy = sy + cy*dy + jump * n.sin(angle)
@@ -1179,8 +1182,6 @@ class NeumannTracer(object):
             heights[index] = height
 
         heights -= func(sx + cx*dx, sy + cy*dy)
-        print 'heights are', heights
-        print 'func in centre is', func(sx + cx*dx, sy + cy*dy)
 
         # check sign changes 4 times
         changes = 0
@@ -1191,8 +1192,6 @@ class NeumannTracer(object):
                 changes += 1
 
         if changes != 4:
-            print 'changes is', changes
-            print '------'
             return None
 
         cut = int(0.25*samples)
@@ -1200,7 +1199,6 @@ class NeumannTracer(object):
         imax = n.argmax(heights)
         ibefore = imax - cut
         iafter = imax + cut
-        print 'max', imax, ibefore, iafter
         # iothermax = (iafter % samples) + n.argmax(n.hstack(
         #     [heights[(iafter % samples):], heights[(ibefore % samples):]]))
         if iafter >= samples or ibefore < 0:
@@ -1210,13 +1208,10 @@ class NeumannTracer(object):
             iothermax = (iafter % samples) + n.argmax(n.hstack(
                 [heights[iafter:], heights[:ibefore]]))
         iothermax %= samples
-        print 'othermax', iothermax 
-        print 'max heights', heights[imax], heights[iothermax]
 
         imin = n.argmin(heights)
         ibefore = imin - cut
         iafter = imin + cut
-        print 'min', imin, ibefore, iafter
         if iafter >= samples or ibefore < 0:
             iothermin = (iafter % samples) + n.argmin(
                 heights[(iafter % samples):(ibefore % samples)])
@@ -1224,15 +1219,6 @@ class NeumannTracer(object):
             iothermin = (iafter % samples) + n.argmin(n.hstack(
                 [heights[iafter:], heights[:ibefore]]))
         iothermin %= samples
-        print 'othermin', iothermin
-        print 'min heights', heights[imin], heights[iothermin]
-
-        print 'indices', imax, iothermax, imin, iothermin
-        print 'angles'
-        print angles[imax]
-        print angles[imin]
-        print angles[iothermax]
-        print angles[iothermin]
 
         return sorted(((1.0, angles[imax]), (-1.0, angles[imin]),
                       (1.0, angles[iothermax]), (-1.0, angles[iothermin])),
@@ -1269,13 +1255,12 @@ class NeumannTracer(object):
 
         curs = 0
         for saddle in self.saddles:
-            self.vprint('\r\tCurrent saddle {0} / {1}'.format(
-                curs, len(self.saddles)), False)
+            if curs % 50 == 0:
+                self.vprint('\r\tCurrent saddle {0} / {1}'.format(
+                    curs, len(self.saddles)), False)
             curs += 1
 
             saddlex, saddley = saddle
-            print
-            print 'saddle is', saddlex, saddley
             if saddlex % 2 == 0:
                 ais = even_adj_indices.copy()
             else:
@@ -1285,7 +1270,6 @@ class NeumannTracer(object):
             ais[:, 1] += saddley
 
             val = arr[saddlex, saddley]
-            print 'val is', val
             adjs = n.zeros(6, dtype=n.float64)
             for i in range(6):
                 adjs[i] = arr[ais[i][0] % self.xnum, ais[i][1] % self.ynum]
@@ -1298,22 +1282,15 @@ class NeumannTracer(object):
             tracing_start_points = []
             if isolate_gradients or self.upsampling_canon:
                 jump_frac = 1.1
-                print 'integer?', saddlex, saddley, nearly_integer(saddlex), nearly_integer(saddley)
                 if nearly_integer(saddlex) and nearly_integer(saddley):
                     # Probably could do a real int check but lets be safe
                     jump = jump_frac * self.dx
-                    print 'jump is', jump, self.dx
-                    print 'nearly integer', saddlex, saddley
                 else:
                     jump = jump_frac*self.dx/(
                         float(self.upsample) if self.upsampling_canon else 1.)
-                    print 'jump is', jump, self.dx
                 tracing_start_points = self.gradient_directions_around_saddle(
                     (saddlex, saddley), jump,
                     isolate_gradients)
-                print '!!!'
-                print 'tsps are', tracing_start_points
-                print '!!!'
                 if tracing_start_points is not None:
                     # tracing_start_points = sorted(tracing_start_points,
                     #                               key=lambda j: j[1])
@@ -1321,12 +1298,9 @@ class NeumannTracer(object):
                         (sign, (saddle[0] + jump_frac*n.cos(angle),
                                 saddle[1] + jump_frac*n.sin(angle))) for
                         sign, angle in tracing_start_points]
-                    print 'modified tsps are', tracing_start_points
-                    print 'from saddle', saddle
             if not tracing_start_points:
                 tracing_start_points = []
                 current_region_angles = []
-                print 'adjs are', adjs
                 for i in range(6):
                     cur_adj = adjs[i]
                     next_adj = adjs[(i+1) % 6]
@@ -1338,7 +1312,6 @@ class NeumannTracer(object):
             else:
                 isolated_saddles.append(saddle)
 
-            print 'tracing_start_points are', tracing_start_points
             for coords in tracing_start_points:
                 sign, coords = coords
                 if sign == 1.0:
@@ -3052,35 +3025,7 @@ def get_random_hermite_mode(energy, adjust=[], seed=0):
         return ans * radial_prefactor
     return n.vectorize(sumfunc)
 
-def save_domain_results_at(scales, domains=1000, downscale=3,
-                           filen='neumann_results'):
-    '''Runs get_statistics_at with the same arguments, and saves the
-    results in a file starting with filen'''
-    import cPickle
-    import json
-    results = get_domain_statistics_at(scales, domains, downscale)
-    i = 1
-
-    while os.path.exists('{}_{}.pickle'.format(filen, i)):
-        i += 1
-    with open('{}_{}.pickle'.format(filen, i), 'wb') as fileh:
-        cPickle.dump(results, fileh)
-
-    results2 = {}
-    for scale, value in results.items():
-        results2[key] = (value[0], value[1],
-                         value[2], map(list, list(value[3])), value[4])
-    with open('{}_{}.json'.format(filen, i), 'w') as fileh:
-        json.dump(results2, fileh)
-    return results
-
-def load_domain_results(filen='neumann_results.pickle'):
-    import cPickle
-    with open(filen, 'rb') as fileh:
-        results = cPickle.load(fileh)
-    return results
-
-def get_domain_statistics_at(scales, domains=1000, downscale=3):
+def do_domain_statistics_at_scales(scales, domains=1000, downscale=1, filen='neumann_statistics'):
     '''For every scale in scales, generates random torus eigenfunctions at
     that scale, counting the domains unitl it has found at least the
     number specified as an argument.
@@ -3090,42 +3035,93 @@ def get_domain_statistics_at(scales, domains=1000, downscale=3):
     results = {}
 
     for scale in scales:
-        print 'Getting statistics at scale', scale
+        domains_found = 0
+        while domains_found < domains:
+            lineprint('energy {}: found {} / {} domains'.format(
+                scale, domains_found, domains))
+            tracer, results = do_domain_statistics_at_scale(
+                scale, downscale)
+            domains_found += 2*results['count'][2]
+
+            cur_filen = get_next_filen(filen + '_{}_'.format(scale))
+            with open(cur_filen, 'wb') as fileh:
+                cPickle.dump(results, fileh)
+    print
+                          
+
+def do_domain_statistics_at_scale(scale, downscale=1):
+    areas = []
+    perimeters = []
+    rhos = []
+    degree_dists = n.zeros((8,2))
+    diameters = []
+
+    a = get_periodic_tracer(scale, downscale=downscale)
+         
+    if a is None:
+        return None
+    areas = a.get_domain_areas()
+    perimeters = a.get_domain_perimeters()
+    rhos = a.get_domain_rhos()
+    degree_dists = a.get_critical_degree_dists()
+    diameters = a.get_domain_diameters()
+    count = map(len, a.crits)
+
+    results = {'areas': areas, 'perimeters': perimeters,
+               'rhos': rhos, 'degree_dists': degree_dists,
+               'diameters': diameters,
+               'energy': scale, 'count': count}
+
+    return a, results
+
+def load_domain_statistics_from_filens(filens, flatten=True):
+    '''For each filen, tries to load a domain statistics
+    dictionary, and returns a list indexed by energy.'''
+    results = {}
+    for filen in filens:
+        with open(filen, 'rb') as fileh:
+            data = cPickle.load(fileh)
+        energy = data['energy']
+        if energy not in results:
+            results[energy] = []
+        results[energy].append(data)
+
+    if flatten:
+        results = flatten_results(results)
+
+    return results
+
+def flatten_results(results):
+    '''Takes a results dictionary and merges all the constituent results.'''
+    new_results = {}
+    for scale, energy_results in results.items():
         areas = []
         perimeters = []
         rhos = []
-        degree_dists = n.zeros((8,2))
+        degree_dists = n.zeros((8, 2), dtype=n.float)
         diameters = []
-
-        while len(areas) < domains:
-            print 'Currently done', len(areas), 'domains'
-            a = get_periodic_tracer(scale, downscale=downscale)
-            if a is None:
-                break  # None is returned if there are no compatible
-                       # periodic wavevectors
-            areas.extend(a.get_domain_areas())
-            perimeters.extend(a.get_domain_perimeters())
-            rhos.extend(a.get_domain_rhos())
-            degree_dists += a.get_critical_degree_dists()
-            diameters.extend(a.get_domain_diameters())
-
-        length = float(int(100/float(downscale) * float(scale)/5.))
-        real_length = 2*n.pi
-        length_factor = 1/length * real_length
-        wavelength = 1/n.sqrt(2)
-
-
-        results[scale] = {'areas': areas, 'perimeters': perimeters,
-                          'rhos': rhos, 'degree_dists': degree_dists,
-                          'length_factor': length_factor,
-                          'energy': scale}
-                          
-    for scale, values in results.items():
-        if 'degree_dists' in values:
-            degree_dists = values['degree_dists']
-            degree_dists /= degree_dists[0, 0] / 2.
-
-    return results
+        count = []
+        tracer_number = 0
+        for tracer_results in energy_results:
+            areas.append(tracer_results['areas'])
+            perimeters.append(tracer_results['perimeters'])
+            rhos.append(tracer_results['rhos'])
+            degree_dists += tracer_results['degree_dists']
+            diameters.append(tracer_results['diameters'])
+            count.append(tracer_results['count'])
+            tracer_number += 1
+        areas = n.hstack(areas)
+        perimeters = n.hstack(perimeters)
+        rhos = n.hstack(rhos)
+        degree_dists /= float(tracer_number)
+        diameters = n.hstack(diameters)
+        count = n.sum(n.array(count), axis=0)
+        new_results[scale] = {'areas': areas, 'perimeters': perimeters,
+                              'rhos': rhos, 'degree_dists': degree_dists,
+                              'diameters': diameters,
+                              'energy': scale, 'count': count}
+    return new_results
+             
 
 def nearly_integer(v, cutoff=0.0001):
     diff = n.abs(int(v) - v)
@@ -3153,3 +3149,10 @@ def get_degree_statistics(scale=65, downscale=7, runs=100):
         nines.append(n.sum(mindegs==9))
 
     return [threes, fours, fives, sixs, sevens, eights, nines]
+
+def get_next_filen(filen):
+    '''Returns next iteration of filen that doesn't exist.'''
+    i = 1
+    while os.path.exists('{}_{:05d}.pickle'.format(filen, i)):
+        i += 1
+    return '{}_{:05d}.pickle'.format(filen, i)
