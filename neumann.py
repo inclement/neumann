@@ -256,7 +256,7 @@ from colorsys import hsv_to_rgb
 from matplotlib import interactive as mpl_interactive
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-from matplotlib.cm import jet
+from matplotlib.cm import jet, hsv
 
 try:
     from scipy.spatial import (Voronoi, voronoi_plot_2d,
@@ -882,6 +882,7 @@ class NeumannTracer(object):
         self.found_crits = False
         self.traced_lines = False
         self.hessian_filled = False
+        self.got_hess_dirs = False
         self.graph_built = False
         self.found_domains = False
         self.upsampled_crits = False
@@ -1419,6 +1420,28 @@ class NeumannTracer(object):
                                     self.sy+entry[1]*self.dy),
                    self.arr[entry[0], entry[1]])
 
+    def calculate_hessian_directions(self):
+        '''Associate hessian direction vectors with each critical point.'''
+        if not self.found_crits:
+            self.find_critical_points()
+        maxima, minima, saddles, degenerate = self.crits
+        hess_dirs = {}
+        for point in maxima + minima + saddles:
+            hess = hessian(self.func, point[0], point[1],
+                           self.dx, self.dy)
+            eigs, eigvs = n.linalg.eig(hess)
+            ev1, ev2 = eigvs
+            ev1 /= mag(ev1)
+            ev2 /= mag(ev2)
+            vpoint = n.array(point)
+            v1 = n.array([vpoint - 2*ev1, vpoint + 2*ev1])
+            v2 = n.array([vpoint - 2*ev2, vpoint + 2*ev2])
+            hess_dirs[point] = (v1, v2)
+
+        self.hess_dirs = hess_dirs
+        self.got_hess_dirs = True
+        return hess_dirs
+
     def make_hessian_array(self, compiled=True):
         '''
         Calculate the hessian at every point of self.arr.
@@ -1782,6 +1805,89 @@ class NeumannTracer(object):
         self.vprint()
         return grad_arr
 
+    def get_correlation_functions(self):
+        if not self.found_crits:
+            self.find_critical_points()
+        maxima, minima, saddles, degenerate = self.crits
+        xnum, ynum = self.shape
+
+        extremum_extremum = []
+        extremum_saddle = []
+        crit_crit = []
+        max_min = []
+        saddle_saddle = []
+
+        for index, maximum in enumerate(maxima):
+            self.vprint('\r\tmax index {} / {}'.format(index,
+                                                       len(maxima)), False)
+            pos = n.array(maximum)
+            for other_index, other_maximum in enumerate(
+                    maxima[(index+1):]):
+                other_pos = n.array(other_maximum)
+                distance = mag(other_pos - pos)
+                if distance > 0.5*self.xnum:
+                    distance = reduce_distance(maximum, other_maximum,
+                                               xnum, ynum)
+                extremum_extremum.append(distance)
+                crit_crit.append(distance)
+            for other_index, minimum in enumerate(minima):
+                other_pos = n.array(minimum)
+                distance = mag(other_pos - pos)
+                if distance > 0.5*self.xnum:
+                    distance = reduce_distance(maximum, minimum,
+                                               xnum, ynum)
+                max_min.append(distance)
+                extremum_extremum.append(distance)
+                crit_crit.append(distance)
+                max_min.append(distance)
+            for other_index, saddle in enumerate(saddles):
+                other_pos = n.array(saddle)
+                distance = mag(other_pos - pos)
+                if distance > 0.5*self.xnum:
+                    distance = reduce_distance(maximum, saddle,
+                                               xnum, ynum)
+                extremum_saddle.append(distance)
+                crit_crit.append(distance)
+                
+
+        for index, minimum in enumerate(minima):
+            self.vprint('\r\tmin index {} / {}'.format(index,
+                                                       len(minima)), False)
+            pos = n.array(minimum)
+            for other_index, other_minimum in enumerate(
+                    maxima[(index+1):]):
+                other_pos = n.array(other_minimum)
+                distance = mag(other_pos - pos)
+                if distance > 0.5*self.xnum:
+                    distance = reduce_distance(maximum, other_minimum,
+                                               xnum, ynum)
+                extremum_extremum.append(distance)
+                crit_crit.append(distance)
+            for other_index, saddle in enumerate(saddles):
+                other_pos = n.array(saddle)
+                distance = mag(other_pos - pos)
+                if distance > 0.5*self.xnum:
+                    distance = reduce_distance(minimum, saddle,
+                                               xnum, ynum)
+                extremum_saddle.append(distance)
+                crit_crit.append(distance)
+
+        for index, saddle in enumerate(saddles):
+            self.vprint('\r\tsaddle index {} / {}'.format(index,
+                                                       len(saddles)), False)
+            pos = n.array(saddle)
+            for other_index, saddle in enumerate(saddles):
+                other_pos = n.array(saddle)
+                distance = mag(other_pos - pos)
+                if distance > 0.5*self.xnum:
+                    distance = reduce_distance(minimum, saddle,
+                                               xnum, ynum)
+                saddle_saddle.append(distance)
+        return (extremum_extremum, extremum_saddle, crit_crit,
+                max_min, saddle_saddle)
+                
+            
+
     def get_voronoi_diagram(self):
         if not self.found_crits:
             self.find_critical_points()
@@ -1810,6 +1916,7 @@ class NeumannTracer(object):
              print_patch_rhos=False,
              figsize=None,
              show_sample_directions=False,
+             show_hessian_directions=False,
              plot_gradients=False,
              plot_nearby_gradients=False,
              plot_delaunay=False,
@@ -1859,6 +1966,8 @@ class NeumannTracer(object):
             self.make_hessian_array()
         if not self.found_domains and show_domain_patches:
             self.get_recognised_domains()
+        if not self.got_hess_dirs and show_hessian_directions:
+            self.calculate_hessian_directions()
 
         plotarr = n.rot90(self.arr[::-1], 3)
 
@@ -1915,8 +2024,13 @@ class NeumannTracer(object):
             for domain in self.domains:
 
                 if colour_patches_by_rho:
+                    cfunc = (hsv if colour_patches_by_rho == 'hsv'
+                            else jet)
                     rho = domain.rho() * n.sqrt(self.eigenvalue)
-                    colour = jet(rho / 1.3)[:3]
+                    if colour_patches_by_rho == 'hsv':
+                        colour = cfunc((rho-0.3) / 0.6)[:3]
+                    else:
+                        colour = cfunc(rho / 1.3)[:3]
                     alpha = 0.95
                 else:
                     colour = hsv_to_rgb(n.random.random(), 1., 1.)
@@ -2035,6 +2149,17 @@ class NeumannTracer(object):
                       interpolation='none', alpha=0.5)
             ax.contour(hessian_arr, levels=[0],
                        linewidths=2, alpha=0.6, color='cyan')
+
+        if show_hessian_directions:
+            hess_dirs = self.hess_dirs
+            for point, vs in hess_dirs.items():
+                v1, v2 = vs
+                ax.plot(v1[:, 0], v1[:, 1],
+                        color=(0, 0.5, 0),
+                        linewidth=1.5)
+                ax.plot(v2[:, 0], v2[:, 1],
+                        color=(0, 0.5, 0),
+                        linewidth=1.5)
 
         self.figax = (fig, ax)
 
@@ -3161,3 +3286,23 @@ def get_next_filen(filen):
     while os.path.exists('{}_{:05d}.pickle'.format(filen, i)):
         i += 1
     return '{}_{:05d}.pickle'.format(filen, i)
+
+
+def reduce_distance(p1, p2, xnum, ynum):
+    '''Takes two positions and finds the shortest distance between
+    them by taking account of periodic boundary conditions.
+    '''
+    p1 = n.array(p1)
+    p2 = n.array(p2)
+    distance = mag(p2 - p1)
+    x1, y1 = p1
+    x2, y2 = p2
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            new_distance = mag((p2 + n.array([dx*xnum, dy*ynum])))
+            if new_distance < distance:
+                distance = new_distance
+    return distance
+
+
+    
