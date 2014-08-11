@@ -171,7 +171,9 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                           dict critdict, double [:] start_point,
                           bytes direction, to_edges,
                           tuple func_params=(),
-                          area_constraint=None):
+                          area_constraint=None,
+                          integer_saddles=True,
+                          double nearby_distance=1.):
     '''Traces the line of maximal gradient from the given position until
     reaching a critical point or until not really moving any more.'''
 
@@ -193,11 +195,13 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
         dirfac = 1.
 
     cdef list points = [[cx, cy]]
+    cdef tuple key
 
     cdef tuple gradient
     cdef double angle
     cdef long nearx, neary
     cdef long index, indx, indy
+    cdef double distance
 
     cdef bint use_func_params = 0
     cdef double [:, :] wvs
@@ -220,7 +224,10 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
 
         if len(points) > 20:
             if magdiff(cx, cy, points[-20][0], points[-20][1]) < 0.75:
-                return (points, [int(n.round(cx)), int(n.round(cy))])
+                if integer_saddles:
+                    return (points, [int(n.round(cx)), int(n.round(cy))])
+                else:
+                    return (points, [cx, cy])
 
         points.append([cx, cy])
 
@@ -239,27 +246,36 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
         if to_edges_bool:
             nearx %= ixnum
             neary %= iynum
-        if (nearx, neary) in critdict:
-            crit_type = critdict[nearx, neary]
-            if ((crit_type == 'maximum' and direction == 'down') or
-                (crit_type == 'minimum' and direction == 'up')):
-            # if crit_type in ['maximum','minimum']:
-                #print (nearx, neary), crit_type, direction
-                points.append((nearx, neary))
-                return (points, (nearx, neary))
+        if integer_saddles:
+            if (nearx, neary) in critdict:
+                crit_type = critdict[nearx, neary]
+                if ((crit_type == 'maximum' and direction == 'down') or
+                    (crit_type == 'minimum' and direction == 'up')):
+                # if crit_type in ['maximum','minimum']:
+                    #print (nearx, neary), crit_type, direction
+                    points.append((nearx, neary))
+                    return (points, (nearx, neary))
         else:
-            for index in range(len(safe_adj_indices)):
-                indx = safe_adj_indices[index, 0]
-                indy = safe_adj_indices[index, 1]
-                if (nearx + indx, neary + indy) in critdict:
-                    coords = (nearx + indx, neary + indy)
-                    crit_type = critdict[coords]
-                    if ((crit_type == 'maximum' and direction == 'down') or
-                        (crit_type == 'minimum' and direction == 'up')):
-                    # if crit_type in ['maximum','minimum']:
-                        #print (nearx, neary), crit_type, direction
-                        points.append(coords)
-                        return (points, coords)
+            keys = critdict.keys()
+            for key in keys:
+                distance = reduce_distance(cx, cy, key, xnum, ynum)
+                if distance < nearby_distance:
+                    print 'nearby!', distance
+                    points.append(key)
+                    return (points, key)
+
+        for index in range(len(safe_adj_indices)):
+            indx = safe_adj_indices[index, 0]
+            indy = safe_adj_indices[index, 1]
+            if (nearx + indx, neary + indy) in critdict:
+                coords = (nearx + indx, neary + indy)
+                crit_type = critdict[coords]
+                if ((crit_type == 'maximum' and direction == 'down') or
+                    (crit_type == 'minimum' and direction == 'up')):
+                # if crit_type in ['maximum','minimum']:
+                    #print (nearx, neary), crit_type, direction
+                    points.append(coords)
+                    return (points, coords)
 
 
 cdef inline tuple grad(func, double x, double y, double dx, double dy):
@@ -409,3 +425,30 @@ cpdef hermite(int n, double x):
             cur = new
             i += 1
     return new
+
+cpdef reduce_distance(double p1x, double p1y, tuple p2t, double xnum, double ynum):
+    '''Takes two positions and finds the shortest distance between
+    them by taking account of periodic boundary conditions.
+    '''
+    cdef double [:] p1
+    cdef double [:] p2
+    cdef double distance
+    cdef double x1, y1, x2, y2
+    cdef double dx, dy, new_distance
+
+    p1 = n.array([p1x, p1y])
+    p2 = n.array(p2t)
+    distance = magdiff(p1[0], p1[1], p2[0], p2[1])
+    x1 = p1[0]
+    y1 = p1[1]
+    x2 = p2[0]
+    y2 = p2[1]
+    for dx in (-1., 0., 1.):
+        for dy in (-1., 0., 1.):
+            new_distance = mag((p2 + n.array([dx*xnum, dy*ynum])))
+            if new_distance < distance:
+                distance = new_distance
+    return distance
+
+cpdef inline mag(double [:] v):
+    return sqrt(v[0]*v[0] + v[1]*v[1])

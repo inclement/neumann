@@ -854,6 +854,9 @@ class NeumannTracer(object):
                  area_constraint=None):
         self.arr = n.zeros((xnum, ynum), dtype=n.float64)
         self.hessian_arr = n.zeros((xnum, ynum), dtype=n.float64)
+        self.hessian_angle_arr = n.zeros(
+            (xnum, ynum), dtype=n.float64)
+
         self.xnum = xnum
         self.ynum = ynum
         self.shape = (xnum, ynum)
@@ -882,6 +885,7 @@ class NeumannTracer(object):
         self.found_crits = False
         self.traced_lines = False
         self.hessian_filled = False
+        self.hessian_angle_filled = False
         self.got_hess_dirs = False
         self.graph_built = False
         self.found_domains = False
@@ -1259,6 +1263,8 @@ class NeumannTracer(object):
         isolate_gradients = self.isolate_gradients
         isolated_saddles = []
 
+        integer_saddles = not self.upsampling_canon
+
         curs = 0
         for saddle in self.saddles:
             if curs % 50 == 0:
@@ -1267,6 +1273,7 @@ class NeumannTracer(object):
             curs += 1
 
             saddlex, saddley = saddle
+            print 'saddlex, saddley', saddlex, saddley
             if saddlex % 2 == 0:
                 ais = even_adj_indices.copy()
             else:
@@ -1283,6 +1290,11 @@ class NeumannTracer(object):
                 # boundary are already ignored by get_critical_points
 
             adjs = adjs - val
+
+            if self.upsampling_canon:
+                nearby_distance = 1. / self.upsample
+            else:
+                nearby_distance = 1.
 
             # Find tracing start points
             tracing_start_points = []
@@ -1337,7 +1349,10 @@ class NeumannTracer(object):
                     self.start_point,
                     direction, self.to_edges,
                     func_params=self.func_params,
-                    area_constraint=self.area_constraint)
+                    area_constraint=self.area_constraint,
+                    integer_saddles=integer_saddles,
+                    nearby_distance=nearby_distance)
+                print 'endcoord is', endcoord
 
                 # Check here whether the line has gone in totally the
                 # wrong direction. Try a simple retest if so.
@@ -1350,6 +1365,7 @@ class NeumannTracer(object):
                     ang_diff = n.abs(ang_diff)
 
                     if ang_diff > 0.6*n.pi:
+                        print 'trying again'
                         points, endcoord = gradient_trace_func(
                             coords[0] + 0.3*diff[0],
                             coords[1] + 0.3*diff[1],
@@ -1358,7 +1374,10 @@ class NeumannTracer(object):
                             self.func, self.crits_dict,
                             self.start_point,
                             direction, self.to_edges,
-                            func_params=self.func_params)
+                            func_params=self.func_params,
+                            area_constraint=self.area_constraint,
+                            integer_saddles=integer_saddles,
+                            nearby_distance=nearby_distance)
 
 
                 if len(points) > 4:
@@ -1377,6 +1396,7 @@ class NeumannTracer(object):
                 if (endcoord is not None and
                     tuple(endcoord) not in self.minima and
                     tuple(endcoord) not in self.maxima):
+                    print 'adding new endcoord', tuple(endcoord)
                     fval = self.func(self.sx + endcoord[0]*self.dx,
                                      self.sy + endcoord[1]*self.dy)
                     if fval > 0:
@@ -1431,8 +1451,8 @@ class NeumannTracer(object):
                            self.dx, self.dy)
             eigs, eigvs = n.linalg.eig(hess)
             ev1, ev2 = eigvs
-            ev1 /= mag(ev1)
-            ev2 /= mag(ev2)
+            ev1 *= 0.01*self.xnum / mag(ev1) 
+            ev2 *= 0.01*self.ynum / mag(ev2) 
             vpoint = n.array(point)
             v1 = n.array([vpoint - 2*ev1, vpoint + 2*ev1])
             v2 = n.array([vpoint - 2*ev2, vpoint + 2*ev2])
@@ -1452,16 +1472,41 @@ class NeumannTracer(object):
         dx, dy = self.dr
         xnum, ynum = self.shape
         if compiled and cneu is not None:
-            hessian_func = cneu.hessian_det
+            hessian_det_func = cneu.hessian_det
         else:
-            hessian_func = hessian_det
+            hessian_det_func = hessian_det
         for x in range(xnum):
             self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
             for y in range(ynum):
-                arr[x, y] = hessian_func(self.func, sx + x*dx,
-                                         sy + y*dy, dx, dy)
+                arr[x, y] = hessian_det_func(self.func, sx + x*dx,
+                                             sy + y*dy, dx, dy)
 
         self.hessian_filled = True
+        self.vprint()
+
+    def make_hessian_angle_array(self, compiled=True):
+        '''Calculate the angle of the Hessian major axis
+        at every point of self.arr.'''
+        self.vprint('Filling Hessian angle array...')
+        arr = self.hessian_angle_arr
+        sx, sy = self.start_point
+        dx, dy = self.dr
+        xnum, ynum = self.shape
+        if compiled and cneu is not None:
+            hessian_func = cneu.hessian
+        else:
+            hessian_func = hessian
+        for x in range(xnum):
+            self.vprint('\r\tx = {0} / {1}'.format(x, xnum), False)
+            for y in range(ynum):
+                hessian = hessian_func(self.func, sx + x*dx,
+                                       sy + y*dy, dx, dy)
+                eigs, eigvs = n.linalg.eig(hessian)
+                vec = eigvs[n.argmin(eigs)]
+                angle = n.arctan2(vec[1], vec[0])
+                arr[x, y] = angle
+
+        self.hessian_angle_filled = True
         self.vprint()
 
     def build_graph(self):
@@ -1908,6 +1953,7 @@ class NeumannTracer(object):
 
     def plot(self, show_critical_points=True,
              trace_lines=True, plot_hessian=False,
+             plot_hessian_angles=False,
              show_saddle_directions=False,
              show_domain_patches=False,
              constrain_patch_rhos=None,
@@ -1968,6 +2014,8 @@ class NeumannTracer(object):
             self.get_recognised_domains()
         if not self.got_hess_dirs and show_hessian_directions:
             self.calculate_hessian_directions()
+        if not self.hessian_angle_filled and plot_hessian_angles:
+            self.make_hessian_angle_array()
 
         plotarr = n.rot90(self.arr[::-1], 3)
 
@@ -2149,6 +2197,11 @@ class NeumannTracer(object):
                       interpolation='none', alpha=0.5)
             ax.contour(hessian_arr, levels=[0],
                        linewidths=2, alpha=0.6, color='cyan')
+
+        if plot_hessian_angles:
+            angle_arr = n.rot90(self.hessian_angle_arr[::-1], 3)
+            ax.imshow(angle_arr, cmap='hsv',
+                      interpolation='none', alpha=0.75)
 
         if show_hessian_directions:
             hess_dirs = self.hess_dirs
@@ -2422,7 +2475,8 @@ def get_filled_array(xnum, ynum, dx, dy, func, start_point=(0.0, 0.0)):
 
 def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
                         critdict, start_point, direction, to_edges,
-                        func_params=(), area_constraint=None):
+                        func_params=(), area_constraint=None,
+                        integer_saddles=True, nearby_distance=1.):
     '''Trace gradient (Neumann) line at point until reaching a critical point.
     func_params is ignored by this python implementation (but may be used by cython).
     '''
@@ -2474,25 +2528,34 @@ def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
         if to_edges in ['periodic']:
             nearx %= xnum
             neary %= ynum
-        if (nearx, neary) in critdict:
-            crit_type = critdict[nearx, neary]
-            if ((crit_type == 'maximum' and direction == 'down') or
-                (crit_type == 'minimum' and direction == 'up')):
-            # if crit_type in ['maximum','minimum']:
-                #print (nearx, neary), crit_type, direction
-                points.append((nearx, neary))
-                return (points, (nearx, neary))
+        if integer_saddles:
+            if (nearx, neary) in critdict:
+                crit_type = critdict[nearx, neary]
+                if ((crit_type == 'maximum' and direction == 'down') or
+                    (crit_type == 'minimum' and direction == 'up')):
+                # if crit_type in ['maximum','minimum']:
+                    #print (nearx, neary), crit_type, direction
+                    points.append((nearx, neary))
+                    return (points, (nearx, neary))
         else:
-            for indices in safe_adj_indices:
-                if (nearx + indices[0], neary + indices[1]) in critdict:
-                    coords = (nearx + indices[0], neary + indices[1])
-                    crit_type = critdict[coords]
-                    if ((crit_type == 'maximum' and direction == 'down') or
-                        (crit_type == 'minimum' and direction == 'up')):
-                    # if crit_type in ['maximum','minimum']:
-                        #print (nearx, neary), crit_type, direction
-                        points.append(coords)
-                        return (points, coords)
+            keys = critdict.keys()
+            for key in keys:
+                distance = reduce_distance((cx, cy), key, xnum, ynum)
+                if distance < nearby_distance:
+                    print 'distance nearby!', distance
+                    points.append(key)
+                    return (points, key)
+
+        for indices in safe_adj_indices:
+            if (nearx + indices[0], neary + indices[1]) in critdict:
+                coords = (nearx + indices[0], neary + indices[1])
+                crit_type = critdict[coords]
+                if ((crit_type == 'maximum' and direction == 'down') or
+                    (crit_type == 'minimum' and direction == 'up')):
+                # if crit_type in ['maximum','minimum']:
+                    #print (nearx, neary), crit_type, direction
+                    points.append(coords)
+                    return (points, coords)
 
 def grad(func, x, y, dx, dy):
     dfdx = (func(x, y)-func(x+0.015*dx, y))/(0.015*dx)
