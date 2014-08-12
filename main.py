@@ -84,8 +84,7 @@ void main (void) {
 correlation_shader_uniforms = '''
 uniform float correlation_width;
 uniform float orth_jump;
-uniform float correlation_cutoff;
-'''
+uniform float correlation_cutoff;'''
 
 neumann_shader_uniforms = '''
 uniform float period;

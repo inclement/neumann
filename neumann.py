@@ -751,6 +751,43 @@ class NeumannDomain(object):
     def rho(self):
         return self.area() / self.perimeter()
 
+    def guess_type(self):
+        '''Tries to work out if self is a star, lens or wedge.'''
+        lines = self.lines
+        lens_cusps = 0
+        star_cusps = 0
+        print 'new guess'
+        for i, line in enumerate(lines):
+            if line.end_type not in ('maximum', 'minimum'):
+                continue
+            ni = (i+1) % len(lines)
+            other_line = lines[ni]
+            angle1 = angle_of(line[-1] - line[-2])
+            angle2 = angle_of(other_line[-1] - other_line[-2])
+            diff = angle2 - angle1
+            if diff > n.pi:
+                diff -= 2*n.pi
+            if diff < -n.pi:
+                diff += 2*n.pi
+            print 'diff is', diff
+            if n.abs(diff) < n.pi/2.:
+                lens_cusps += 1
+            else:
+                star_cusps += 1
+        if lens_cusps + star_cusps != 2:
+            return None
+        if lens_cusps == 2:
+            return 'lens'
+        if star_cusps == 2:
+            return 'star'
+        if lens_cusps == 1 and star_cusps == 1:
+            return 'wedge'
+        return None
+            
+            
+            
+                
+
     def crude_area(self):
         '''Crude and slow...do not use!'''
         return crude_area_from_border([line.points for line in self.lines])
@@ -1292,7 +1329,7 @@ class NeumannTracer(object):
             adjs = adjs - val
 
             if self.upsampling_canon:
-                nearby_distance = 1. / self.upsample
+                nearby_distance = 1.5 / self.upsample
             else:
                 nearby_distance = 1.
 
@@ -1958,6 +1995,7 @@ class NeumannTracer(object):
              show_domain_patches=False,
              constrain_patch_rhos=None,
              colour_patches_by_rho=False,
+             colour_patches_by_domain_type=False,
              print_patch_areas=False,
              print_patch_rhos=False,
              figsize=None,
@@ -1975,6 +2013,7 @@ class NeumannTracer(object):
              minima_style=minima_style_old,
              saddle_style = saddle_style_rami,
              interpolation='none',
+             symmetrise_colours=False,
              cmap='RdYlBu_r'):
         '''
         Plot and return a graph showing (optionally):
@@ -2017,7 +2056,11 @@ class NeumannTracer(object):
         if not self.hessian_angle_filled and plot_hessian_angles:
             self.make_hessian_angle_array()
 
-        plotarr = n.rot90(self.arr[::-1], 3)
+        plotarr = n.rot90(self.arr[::-1], 3).copy()
+        if symmetrise_colours:
+            absmax = n.max((n.max(plotarr), n.abs(n.min(plotarr))))
+            plotarr[0, 0] = absmax
+            plotarr[0, 1] = -1*absmax
 
         #fig, ax = plot_arr_with_crits(plotarr, self.crits)
         maxima, minima, saddles, degenerate = self.crits
@@ -2080,6 +2123,17 @@ class NeumannTracer(object):
                     else:
                         colour = cfunc(rho / 1.3)[:3]
                     alpha = 0.95
+                elif colour_patches_by_domain_type:
+                    domain_type = domain.guess_type()
+                    if domain_type == 'star':
+                        colour = (0., 0., 1.)
+                    elif domain_type == 'lens':
+                        colour = (1., 0., 0.)
+                    elif domain_type == 'wedge':
+                        colour = (0., 1., 0.)
+                    else:
+                        colour = (0.3, 0.3, 0.3)
+                    alpha = 0.7
                 else:
                     colour = hsv_to_rgb(n.random.random(), 1., 1.)
                     alpha = 0.7
@@ -3272,12 +3326,15 @@ def load_domain_statistics_from_filens(filens, flatten=True):
     dictionary, and returns a list indexed by energy.'''
     results = {}
     for filen in filens:
-        with open(filen, 'rb') as fileh:
-            data = cPickle.load(fileh)
-        energy = data['energy']
-        if energy not in results:
-            results[energy] = []
-        results[energy].append(data)
+        try:
+            with open(filen, 'rb') as fileh:
+                data = cPickle.load(fileh)
+            energy = data['energy']
+            if energy not in results:
+                results[energy] = []
+            results[energy].append(data)
+        except cPickle.UnpicklingError:
+            pass
 
     if flatten:
         results = flatten_results(results)
@@ -3367,5 +3424,6 @@ def reduce_distance(p1, p2, xnum, ynum):
                 distance = new_distance
     return distance
 
-
-    
+def angle_of(v):
+    '''Calculates the angle of the given vector.'''
+    return n.arctan2(v[1], v[0])

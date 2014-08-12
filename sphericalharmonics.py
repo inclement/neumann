@@ -158,11 +158,11 @@ class NeumannCubeHandler(object):
 
                         if len(maxima[0]) > 0:
                             print 'plotting'
-                            may.points3d(maxima[0], maxima[1], maxima[2],
+                            may.points3d(maxima[0], maxima[1], maxima[2], 
                                          color=(1, 0, 0))
             
 
-    def plot_net(self, plot_criticals=True, trace_lines=False, cmap='RdYlBu',
+    def plot_net(self, plot_criticals=True, trace_lines=False, cmap='RdYlBu_r',
                  normalise=True):
         '''Plot component tracers via the cube net.'''
         if plot_criticals:
@@ -344,7 +344,8 @@ def crits_to_sphere(side, shape, crits):
 def side_line_to_stereographic_projection(side, line):
     points = []
     for point in line:
-        points.append(side_xy_to_stereographic_projection(side, point[0], point[1]))
+        points.append(
+            side_xy_to_stereographic_projection(side, point[0], point[1]))
     return n.array(points)
 
 def side_line_to_sphere(side, line):
@@ -352,6 +353,19 @@ def side_line_to_sphere(side, line):
     for point in line:
         points.append(side_xy_to_sphere(side, point[0], point[1]))
     return n.array(points)
+
+def side_line_to_stereographic_projection(side, line):
+    points = []
+    for point in line:
+        points.append(
+            side_xy_to_stereographic_projection(side, point[0], point[1]))
+    return n.array(points)
+
+def side_xy_to_stereographic_projection(side, x, y):
+    x, y, z = side_xy_to_xyz(side, x, y)
+    theta, phi = cube_to_angles(x, y, z)
+    px, py = angles_to_stereographic_projection(theta, phi)
+    return [px, py]
 
 def side_to_xs_ys_zs(side, shape):
     xs, ys = n.mgrid[-0.5:0.5:shape*1j, -0.5:0.5:shape*1j]
@@ -369,11 +383,6 @@ def side_to_xs_ys_zs(side, shape):
         return -1*xs, zs, -1*ys
     elif side == 3:
         return xs, -1*zs, ys
-
-    
-# def cube_lines(points=100):
-#     ls = []
-    
 
 def cube_to_stereographic_projection(x, y, z):
     angles = cube_to_angles(x, y, z)
