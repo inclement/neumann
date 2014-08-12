@@ -1389,7 +1389,6 @@ class NeumannTracer(object):
                     area_constraint=self.area_constraint,
                     integer_saddles=integer_saddles,
                     nearby_distance=nearby_distance)
-                print 'endcoord is', endcoord
 
                 # Check here whether the line has gone in totally the
                 # wrong direction. Try a simple retest if so.
@@ -2441,6 +2440,57 @@ class NeumannTracer(object):
 
         plotting.show()
 
+    def plot_torus(self, clf=True, cmap='RdYlBu',
+                   trace_lines=True,
+                   amplitude_modulation=0.2,
+                   extra_theta=0.,
+                   bigr=1.,
+                   littler=0.3):
+
+        if trace_lines and not self.traced_lines:
+            self.trace_neumann_lines()
+        
+        import mayavi.mlab as may
+        if clf:
+            may.clf()
+
+        plotarr = self.arr  # -1 factor corrects mayavi colours
+        xnum, ynum = self.shape
+        absmax = n.max((n.max(plotarr), n.abs(n.min(plotarr))))
+        modulated_plotarr = amplitude_modulation * plotarr / absmax
+
+        r = littler
+        pi = n.pi
+        cos = n.cos
+        sin = n.sin
+        phi, theta = n.mgrid[0:2*pi:xnum*1j, 0:2*pi:ynum*1j]
+        theta += extra_theta
+
+        
+        x = (bigr + (r+modulated_plotarr)*sin(theta)) * sin(phi)
+        y = (bigr + (r+modulated_plotarr)*sin(theta)) * cos(phi)
+        z = (r+modulated_plotarr)*cos(theta)
+
+        mesh = may.mesh(x, y, z, scalars=plotarr, colormap=cmap)
+
+        # Invert colour scheme - flipping array doesn't seem to work
+        lut1 = mesh.module_manager.scalar_lut_manager.lut.table.to_array()
+        lut1 = lut1[::-1]
+        mesh.module_manager.scalar_lut_manager.lut.table = lut1
+
+        if trace_lines:
+            lines = self.lines
+            for line in lines:
+                segs = sanitise_line(line)
+                for seg in segs:
+                    xs = seg[:, 0] / xnum * 2*n.pi
+                    ys = seg[:, 1] / ynum * 2*n.pi
+                    xpoints = (bigr + r*sin(xs)) * sin(ys)
+                    ypoints = (bigr + r*sin(xs)) * cos(ys)
+                    zpoints = r * cos(xs)
+                    may.plot3d(xpoints, ypoints, zpoints, color=(1, 0, 1),
+                               tube_radius=0.01)
+             
 
     def plot3d(self, clf=True, save=''):
         import mayavi.mlab as may
@@ -3427,3 +3477,18 @@ def reduce_distance(p1, p2, xnum, ynum):
 def angle_of(v):
     '''Calculates the angle of the given vector.'''
     return n.arctan2(v[1], v[0])
+
+def degree_1_critical_point(x, y):
+    
+    if n.isnan(x) or n.isnan(y):
+        raise Exception('nan')
+        
+    epsi = .1;
+    x0 = 0.7;  y0 = n.pi/4+.45;  
+    rx =  .80*n.pi/4;   ry = .6*n.pi/4;
+    amp_bump = 10**3;
+
+    if (n.abs(x-x0) < rx) and (n.abs(y-y0) < ry):
+        return (n.sin(2*y) + epsi*n.cos(2*x)) + amp_bump * n.exp(-1/(rx**2-(x-x0)**2)-1/(ry**2-(y-y0)**2)) 
+    else:
+        return (n.sin(2*y) + epsi*n.cos(2*x))
