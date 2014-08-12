@@ -647,6 +647,10 @@ class CriticalGraph(dict):
         else:
             return None
 
+class DelaunayGraph(CriticalGraph):
+    '''Identical to the normal CriticalGraph but renamed for clarity.'''
+    pass
+
 class NeumannDomain(object):
     '''Represents a Neumann domain by storing a list of boundary
     NeumannLines. Also stores the number of saddles, maxima and minima
@@ -1310,7 +1314,6 @@ class NeumannTracer(object):
             curs += 1
 
             saddlex, saddley = saddle
-            print 'saddlex, saddley', saddlex, saddley
             if saddlex % 2 == 0:
                 ais = even_adj_indices.copy()
             else:
@@ -2292,20 +2295,15 @@ class NeumannTracer(object):
             for triangle in triangles:
                 triangle = triangle.astype(n.int64)
                 types = [cd[tuple(triangle[i])] for i in range(3)]
-                print 'triangle is', triangle
-                print 'types are', types
                 for i in range(3):
-                    current_points = n.roll(triangle, i)[:2]
+                    current_points = n.roll(triangle, i, axis=0)[:2]
                     current_types = n.roll(types, i)[:2]
-                    print 'current', current_types
                     if ((current_types[0] == 'saddle' and
                          current_types[1] == 'saddle') or
                         ('maximum' in current_types and
                          'minimum' in current_types)):
-                        print 'not plotting'
                         pass
                     else:
-                        print 'plotting', i
                         print [tuple(row) for row in current_points]
                         ax.plot(current_points[:, 0], current_points[:, 1],
                                 color='green')
@@ -2480,16 +2478,19 @@ class NeumannTracer(object):
 
         if trace_lines:
             lines = self.lines
-            for line in lines:
+            for index, line in enumerate(lines):
+                self.vprint('\r\tPlotting line {} / {} on torus'.format(index, len(lines)), False)
                 segs = sanitise_line(line)
                 for seg in segs:
                     xs = seg[:, 0] / xnum * 2*n.pi
                     ys = seg[:, 1] / ynum * 2*n.pi
+                    local
                     xpoints = (bigr + r*sin(xs)) * sin(ys)
                     ypoints = (bigr + r*sin(xs)) * cos(ys)
                     zpoints = r * cos(xs)
                     may.plot3d(xpoints, ypoints, zpoints, color=(1, 0, 1),
                                tube_radius=0.01)
+            self.vprint()
              
 
     def plot3d(self, clf=True, save=''):
