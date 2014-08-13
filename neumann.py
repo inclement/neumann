@@ -578,6 +578,27 @@ class CriticalGraph(dict):
             rhos = [rho * root_eig for rho in rhos]
         return rhos
 
+    def get_domain_rhos_by_type(self, eigenvalue=None):
+        domains = self.get_closed_domains()
+        rhos = {'lens': [], 'star': [], 'wedge': [], 'bad': []}
+        i = 0
+        for domain in domains:
+            if i % 50 == 0:
+                lineprint('\rGetting rho of domain %d / %d' % (i, len(domains)),
+                          False)
+            i += 1
+            rho = domain.rho()
+            domain_type = domain.guess_type()
+            if domain_type is None:
+                domain_type = 'bad'
+            rhos[domain_type].append(rho)
+        print  # Lineprint newline
+        if eigenvalue is not None:
+            root_eig = n.sqrt(eigenvalue)
+            for key, rho_vals in rhos.items():
+                rhos[key] = [rho * root_eig for rho in rho_vals]
+        return rhos
+
     def get_domain_from(self, line, dir='clockwise'):
         '''
         Returns the closed domain (or None if the algorithm fails)
@@ -647,9 +668,72 @@ class CriticalGraph(dict):
         else:
             return None
 
-class DelaunayGraph(CriticalGraph):
-    '''Identical to the normal CriticalGraph but renamed for clarity.'''
-    pass
+class DelaunayGraph(object):
+    '''Takes a set of points, and provides some basic methods for
+    working with their Delaunay triangulation.'''
+    def __init__(self, points, types, boundary=None):
+        assert len(types) == len(points)
+        self.triangulation = triangulation = Delaunay(n.array(points))
+        self.graph = graph = {}
+
+        points = triangulation.points.astype(n.int64)
+        points = [tuple(point) for point in points]
+        simplices = triangulation.simplices
+
+        for simplex in simplices:
+            simplex_points = n.array([points[i] for i in simplex])
+            for i in range(3):
+                cur_roll = n.roll(simplex_points, i, axis=0)
+                cur_crit = tuple(cur_roll[0])
+                nex_crit = tuple(cur_roll[1])
+                cur_type = types[cur_crit]
+                nex_type = types[nex_crit]
+                if (cur_type == 'saddle' and nex_type == 'saddle' or
+                    cur_type == 'minimum' and nex_type == 'maximum' or
+                    cur_type == 'maximum' and nex_type == 'minimum'):
+                    continue  
+                if cur_crit not in graph:
+                    graph[cur_crit] = set()
+                adjacency_set = graph[cur_crit]
+                adjacency_set.add(nex_crit)
+
+    def mark_boundary_points(self):
+        pass
+
+    def get_degree_dists(self):
+        degrees = {}
+        for key, value in self.graph.items():
+            num = len(value)
+            if num not in degrees:
+                degrees[num] = 0
+            degrees[num] += 1
+        return degrees
+
+    def get_degree_dists_array(self):
+        degrees = self.get_degree_dists()
+
+        arr = n.zeros((8, 2), dtype=n.float64)
+        arr[:, 0] = n.arange(2, 10)
+
+        total = 0.
+        for degree, number in degrees.items():
+            total += number
+
+        for degree, number in degrees.items():
+            arr[degree-2, 1] = number / total
+
+        return arr 
+
+
+
+
+
+
+
+
+            
+
+        
 
 class NeumannDomain(object):
     '''Represents a Neumann domain by storing a list of boundary
@@ -760,20 +844,18 @@ class NeumannDomain(object):
         lines = self.lines
         lens_cusps = 0
         star_cusps = 0
-        print 'new guess'
         for i, line in enumerate(lines):
             if line.end_type not in ('maximum', 'minimum'):
                 continue
             ni = (i+1) % len(lines)
             other_line = lines[ni]
             angle1 = angle_of(line[-1] - line[-2])
-            angle2 = angle_of(other_line[-1] - other_line[-2])
+            angle2 = angle_of(other_line[1] - other_line[0])
             diff = angle2 - angle1
             if diff > n.pi:
                 diff -= 2*n.pi
             if diff < -n.pi:
                 diff += 2*n.pi
-            print 'diff is', diff
             if n.abs(diff) < n.pi/2.:
                 lens_cusps += 1
             else:
@@ -1543,6 +1625,8 @@ class NeumannTracer(object):
                 eigs, eigvs = n.linalg.eig(hessian)
                 vec = eigvs[n.argmin(eigs)]
                 angle = n.arctan2(vec[1], vec[0])
+                if angle < 0:
+                    angle += n.pi
                 arr[x, y] = angle
 
         self.hessian_angle_filled = True
@@ -1757,6 +1841,11 @@ class NeumannTracer(object):
         if not self.graph_built:
             self.build_graph()
         return self.graph.get_domain_rhos(self.eigenvalue)
+
+    def get_domain_rhos_by_type(self):
+        if not self.graph_built:
+            self.build_graph()
+        return self.graph.get_domain_rhos_by_type(self.eigenvalue)
 
     def get_neumann_heights(self):
         '''Returns a list of heights of all points on detected
@@ -1989,6 +2078,14 @@ class NeumannTracer(object):
         points = maxima + minima + saddles
         v = Delaunay(n.array(points))
         return v
+
+    def get_delaunay_graph(self):
+        if not self.found_crits:
+            self.find_critical_points()
+
+        maxima, minima, saddles, degenerate = self.crits
+        points = maxima + minima + saddles
+        return DelaunayGraph(points, self.crits_dict)
 
     def plot(self, show_critical_points=True,
              trace_lines=True, plot_hessian=False,
@@ -3361,12 +3458,15 @@ def do_domain_statistics_at_scale(scale, downscale=1):
     areas = a.get_domain_areas()
     perimeters = a.get_domain_perimeters()
     rhos = a.get_domain_rhos()
+    rhos_by_type = a.get_domain_rhos_by_type()
     degree_dists = a.get_critical_degree_dists()
     diameters = a.get_domain_diameters()
     count = map(len, a.crits)
 
     results = {'areas': areas, 'perimeters': perimeters,
-               'rhos': rhos, 'degree_dists': degree_dists,
+               'rhos': rhos,
+               'rhos_by_type': rhos_by_type,
+               'degree_dists': degree_dists,
                'diameters': diameters,
                'energy': scale, 'count': count}
 
@@ -3402,6 +3502,7 @@ def flatten_results(results):
         degree_dists = n.zeros((8, 2), dtype=n.float)
         diameters = []
         count = []
+        rhos_by_type = {'lens': [], 'star': [], 'wedge': [], 'bad': []}
         tracer_number = 0
         for tracer_results in energy_results:
             areas.append(tracer_results['areas'])
@@ -3410,6 +3511,16 @@ def flatten_results(results):
             degree_dists += tracer_results['degree_dists']
             diameters.append(tracer_results['diameters'])
             count.append(tracer_results['count'])
+            if 'rhos_by_type' in tracer_results:
+                rhos_by_type['lens'].append(
+                    tracer_results['rhos_by_type']['lens'])
+                rhos_by_type['star'].append(
+                    tracer_results['rhos_by_type']['star'])
+                rhos_by_type['wedge'].append(
+                    tracer_results['rhos_by_type']['wedge'])
+                rhos_by_type['bad'].append(
+                    tracer_results['rhos_by_type']['bad'])
+                
             tracer_number += 1
         areas = n.hstack(areas)
         perimeters = n.hstack(perimeters)
@@ -3418,11 +3529,103 @@ def flatten_results(results):
         diameters = n.hstack(diameters)
         count = n.sum(n.array(count), axis=0)
         new_results[scale] = {'areas': areas, 'perimeters': perimeters,
-                              'rhos': rhos, 'degree_dists': degree_dists,
+                              'rhos': rhos,
+                              'rhos_by_type': rhos_by_type,
+                              'degree_dists': degree_dists,
                               'diameters': diameters,
                               'energy': scale, 'count': count}
     return new_results
              
+def make_plots_from_results(results, filen='results_plots', bins=30):
+    energies = sorted(results.keys())
+    fig_size = (5, 4)
+    mpl_interactive(False)
+
+    legend = []
+    fig, ax = plt.subplots()
+    for energy, areas in [(energy, results[energy]['areas']) for
+                          energy in energies]:
+        ys, xs = n.histogram(areas*energy, bins=n.linspace(0, 30, bins),
+                             density=True)
+        dx = 0.5*(xs[1] - xs[0])
+        ax.plot(xs[:-1] + dx, ys)
+        legend.append(str(energy))
+    ax.legend(legend)
+    ax.set_xlabel('area $\\times\lambda$')
+    ax.set_ylabel('PDF')
+    ax.set_xlim(0, 30)
+    fig.set_size_inches(fig_size)
+    fig.tight_layout()
+    fig.savefig(filen + '_areas.png', dpi=200)
+
+    legend = []
+    fig, ax = plt.subplots()
+    for energy, perimeters in [(energy, results[energy]['perimeters']) for
+                          energy in energies]:
+        ys, xs = n.histogram(perimeters*n.sqrt(energy),
+                             bins=n.linspace(0, 30, bins), density=True)
+        dx = 0.5*(xs[1] - xs[0])
+        ax.plot(xs[:-1] + dx, ys)
+        legend.append(str(energy))
+    ax.legend(legend)
+    ax.set_xlabel('perimeter $\\times\sqrt{\lambda}$')
+    ax.set_ylabel('PDF')
+    ax.set_xlim(0, 30)
+    fig.set_size_inches(fig_size)
+    fig.tight_layout()
+    fig.savefig(filen + '_perimeters.png', dpi=200)
+
+    legend = []
+    fig, ax = plt.subplots()
+    for energy, diameters in [(energy, results[energy]['diameters']) for
+                          energy in energies]:
+        ys, xs = n.histogram(diameters*n.sqrt(energy),
+                             bins=n.linspace(0, 10, bins),
+                             density=True)
+        dx = 0.5*(xs[1] - xs[0])
+        ax.plot(xs[:-1] + dx, ys)
+        legend.append(str(energy))
+    ax.legend(legend)
+    ax.set_xlabel('diameter $\\times\sqrt{\lambda}$')
+    ax.set_ylabel('PDF')
+    ax.set_xlim(0, 15)
+    fig.set_size_inches(fig_size)
+    fig.tight_layout()
+    fig.savefig(filen + '_diameters.png', dpi=200)
+    
+    legend = []
+    fig, ax = plt.subplots()
+    for energy, rhos in [(energy, results[energy]['rhos']) for
+                          energy in energies]:
+        ys, xs = n.histogram(rhos, bins=n.linspace(0, 1.5, bins),
+                             density=True)
+        dx = 0.5*(xs[1] - xs[0])
+        ax.plot(xs[:-1] + dx, ys)
+        legend.append(str(energy))
+    ax.vlines([0.785, 0.92], 0, 3.0)
+    ax.legend(legend)
+    ax.set_xlabel('$\\rho$')
+    ax.set_ylabel('PDF')
+    fig.set_size_inches(fig_size)
+    fig.tight_layout()
+    fig.savefig(filen + '_rhos.png', dpi=200)
+
+    legend = []
+    fig, ax = plt.subplots()
+    for energy, degree_dists in [(energy, results[energy]['degree_dists']) for
+                          energy in energies]:
+        ax.plot(degree_dists[:, 0], degree_dists[:, 1])
+        legend.append(str(energy))
+    ax.legend(legend)
+    ax.set_xlabel('degree')
+    ax.set_ylabel('PDF')
+    fig.set_size_inches(fig_size)
+    fig.tight_layout()
+    fig.savefig(filen + '_degrees.png', dpi=200)
+
+    mpl_interactive(True)
+
+        
 
 def nearly_integer(v, cutoff=0.0001):
     diff = n.abs(int(v) - v)
