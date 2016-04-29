@@ -66,7 +66,7 @@ def plot_func(func, modulation=0., shape=(101, 101), cmap='RdYlBu',
     x += offset[0]
     y += offset[1]
     z += offset[2]
-    print 'xmin is', n.min(x)
+    print('xmin is', n.min(x))
 
     surf = may.mesh(x, y, z, scalars=s, colormap=cmap)
     if emph_doms:
@@ -78,7 +78,7 @@ def plot_func(func, modulation=0., shape=(101, 101), cmap='RdYlBu',
         lut[:128, 0] = n.ones(128)*255
         lut[:128, 1] = n.ones(128)*255
         lut[:128, 2] = n.ones(128)*255
-        print 'lut is', lut
+        print('lut is', lut)
         surf.module_manager.scalar_lut_manager.lut.table = lut
         may.draw()
 
