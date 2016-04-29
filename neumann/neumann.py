@@ -249,6 +249,8 @@ The individual classes and functions of neumann.py are documented below.
 
 '''
 
+from __future__ import print_function, division
+
 import numpy as n
 from itertools import product, chain, permutations
 from colorsys import hsv_to_rgb
@@ -264,7 +266,7 @@ try:
     scipy_spatial_import = True
 except ImportError:
     scipy_spatial_import = False
-    print 'Failed to import Delaunay and Voronoi tools.'
+    print('Failed to import Delaunay and Voronoi tools.')
 from scipy.misc import factorial
 
 import random
@@ -276,21 +278,15 @@ from functools import partial
 try:
     import cneumann as cneu
 except ImportError:
-    print ('Failed to import cneumann. Everything will work fine, but if '
-           'fixed this will make things much faster!')
+    print('Failed to import cneumann. Everything will work fine, but if '
+          'fixed this will make things much faster!')
     cneu = None
     
-# try:
-#     import mayavi.mlab as may
-# except ImportError:
-#     may = None
-#     print 'Failed to import mayavi. 3d plotting will not work.'
-
 try:
     import igraph as ig
 except ImportError:
     ig = None
-    print 'Failed to import igraph. Using igraph tools may crash the program.'
+    print('Failed to import igraph. Using igraph tools may crash the program.')
 
 mpl_linestyles = ['', ' ', 'None', '--', '-.', '-', ':']
 patch_linestyles = ['solid','dashed','dashdot','dotted']
@@ -527,7 +523,7 @@ class CriticalGraph(dict):
             i += 1
             area = domain.area()
             areas.append(area)
-        print # Lineprint newline
+        print()  # Lineprint newline
         return areas
 
     def get_domain_perimeters(self):
@@ -542,7 +538,7 @@ class CriticalGraph(dict):
             i += 1
             perimeter = domain.perimeter()
             perimeters.append(perimeter)
-        print  # Lineprint newline
+        print()  # Lineprint newline
         return perimeters
 
     def get_domain_diameters(self):
@@ -558,7 +554,7 @@ class CriticalGraph(dict):
             diameter = domain.diameter()
             if diameter is not None:
                 diameters.append(diameter)
-        print # Lineprint newline
+        print() # Lineprint newline
         return diameters
 
     def get_domain_rhos(self, eigenvalue=None):
@@ -572,7 +568,7 @@ class CriticalGraph(dict):
             i += 1
             rho = domain.rho()
             rhos.append(rho)
-        print  # Lineprint newline
+        print()  # Lineprint newline
         if eigenvalue is not None:
             root_eig = n.sqrt(eigenvalue)
             rhos = [rho * root_eig for rho in rhos]
@@ -592,7 +588,7 @@ class CriticalGraph(dict):
             if domain_type is None:
                 domain_type = 'bad'
             rhos[domain_type].append(rho)
-        print  # Lineprint newline
+        print()  # Lineprint newline
         if eigenvalue is not None:
             root_eig = n.sqrt(eigenvalue)
             for key, rho_vals in rhos.items():
@@ -624,7 +620,7 @@ class CriticalGraph(dict):
             if start in lines_come_from:
                 in_line_index = lines_come_from.index(start)
             else:
-                print 'Start not found'
+                print('Start not found')
                 return None
             if dir == 'clockwise':
                 out_line_index = (in_line_index + 1) % len(node_lines)
@@ -1486,7 +1482,7 @@ class NeumannTracer(object):
                     ang_diff = n.abs(ang_diff)
 
                     if ang_diff > 0.6*n.pi:
-                        print 'trying again'
+                        print('trying again')
                         points, endcoord = gradient_trace_func(
                             coords[0] + 0.3*diff[0],
                             coords[1] + 0.3*diff[1],
@@ -1517,7 +1513,7 @@ class NeumannTracer(object):
                 if (endcoord is not None and
                     tuple(endcoord) not in self.minima and
                     tuple(endcoord) not in self.maxima):
-                    print 'adding new endcoord', tuple(endcoord)
+                    print('adding new endcoord', tuple(endcoord))
                     fval = self.func(self.sx + endcoord[0]*self.dx,
                                      self.sy + endcoord[1]*self.dy)
                     if fval > 0:
@@ -1540,26 +1536,26 @@ class NeumannTracer(object):
             self.find_critical_points()
 
             
-        print 'maxima'
+        print('maxima')
         for entry in self.maxima:
-            print (entry, self.func(self.sx+entry[0]*self.dx,
-                                    self.sy+entry[1]*self.dy),
-                   self.arr[entry[0], entry[1]])
-        print 'minima'
+            print(entry, self.func(self.sx+entry[0]*self.dx,
+                                   self.sy+entry[1]*self.dy),
+                  self.arr[entry[0], entry[1]])
+        print('minima')
         for entry in self.minima:
-            print (entry, self.func(self.sx+entry[0]*self.dx,
+            print((entry, self.func(self.sx+entry[0]*self.dx,
                                     self.sy+entry[1]*self.dy),
-                   self.arr[entry[0], entry[1]])
-        print 'saddles'
+                   self.arr[entry[0], entry[1]]))
+        print('saddles')
         for entry in self.saddles:
-            print (entry, self.func(self.sx+entry[0]*self.dx,
+            print((entry, self.func(self.sx+entry[0]*self.dx,
                                     self.sy+entry[1]*self.dy),
-                   self.arr[entry[0], entry[1]])
-        print 'degenerate'
+                   self.arr[entry[0], entry[1]]))
+        print('degenerate')
         for entry in self.degenerate:
-            print (entry, self.func(self.sx+entry[0]*self.dx,
+            print((entry, self.func(self.sx+entry[0]*self.dx,
                                     self.sy+entry[1]*self.dy),
-                   self.arr[entry[0], entry[1]])
+                   self.arr[entry[0], entry[1]]))
 
     def calculate_hessian_directions(self):
         '''Associate hessian direction vectors with each critical point.'''
@@ -2299,7 +2295,7 @@ class NeumannTracer(object):
             # And the same for upsampled if they exist
             if not self.upsampling_canon:
                 if len(upsampled_maxima) > 0:
-                    print upsampled_maxima[:, 0], upsampled_maxima[:, 1]
+                    print(upsampled_maxima[:, 0], upsampled_maxima[:, 1])
                     ax.scatter(upsampled_maxima[:, 0], upsampled_maxima[:, 1],
                                60, c='r')
                     legend_entries.append('upsampled maxima')
@@ -2376,7 +2372,7 @@ class NeumannTracer(object):
                         linewidth=1.5)
 
         if plot_voronoi:
-            print 'WARNING: Voronoi plot doesn\'t, will just plot Delaunay.'''
+            print('WARNING: Voronoi plot doesn\'t, will just plot Delaunay.''')
             # Fix this!
             d = self.get_voronoi_diagram()
             from matplotlib import tri
@@ -2401,7 +2397,7 @@ class NeumannTracer(object):
                          'minimum' in current_types)):
                         pass
                     else:
-                        print [tuple(row) for row in current_points]
+                        print([tuple(row) for row in current_points])
                         ax.plot(current_points[:, 0], current_points[:, 1],
                                 color='green')
 
@@ -2453,7 +2449,7 @@ class NeumannTracer(object):
         try:
             import bokeh.plotting as plotting
         except ImportError:
-            print 'Failed to import bokeh. Cancelling plot.'
+            print('Failed to import bokeh. Cancelling plot.')
             return
 
         plotting.output_file("bokehtest.html", title="bokeh test?")
@@ -2744,7 +2740,7 @@ def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
             for key in keys:
                 distance = reduce_distance((cx, cy), key, xnum, ynum)
                 if distance < nearby_distance:
-                    print 'distance nearby!', distance
+                    print('distance nearby!', distance)
                     points.append(key)
                     return (points, key)
 
@@ -2846,10 +2842,10 @@ def get_critical_points(arr, to_edges=False, verbose=True):
             elif point_type == 'degenerate':
                 degenerate.append((x, y))
             elif point_type == 'fail':
-                print
-                print 'A failure occurred at', x, y
-                print ('=> odd number of sign changes, perhaps the function'
-                       'is symmetrical about this point.')
+                print()
+                print('A failure occurred at', x, y)
+                print('=> odd number of sign changes, perhaps the function'
+                      'is symmetrical about this point.')
 
 
     if verbose:
@@ -2879,7 +2875,7 @@ def classify_point(ds):
     elif changes == 6:
         return 'degenerate'
     else:
-        print 'changes', changes
+        print('changes', changes)
         return 'fail'
 
 def plot_arr_with_crits(arr, crits):
@@ -3011,7 +3007,7 @@ def periodic_random_wave_function(energy, seed=0, returnall=False,
                                 1/n.sqrt(energy) * n.exp(
                                     -0.5*(i**2 + j**2)/energy))
                     phases.append(generator.rand() * 2 * n.pi)
-        print
+        print()
                                
                                                
                                 
@@ -3085,9 +3081,9 @@ def get_saddle_directions(vals):
             returns.append(
                 (-1.0, (n.argmax(region_4) + changes[3]) % len(vals)))
     else:
-        print 'Saddle doesn\'t have 4 sign changes?'
-        print vals
-        print changes
+        print('Saddle doesn\'t have 4 sign changes?')
+        print(vals)
+        print(changes)
     return returns
 
 def angle_index(line, lines):
@@ -3167,7 +3163,7 @@ def crude_area_from_border(lines, numsteps=100):
                 intersect_y = (p + u*r)[1]
                 intersections.append(intersect_y)
         if len(intersections) % 2 != 0:
-            print 'Number of intersections is not even!'
+            print('Number of intersections is not even!')
         elif len(intersections) == 2:
             bottom = n.min(intersections)
             top = n.max(intersections)
@@ -3296,7 +3292,7 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
         length = int(100/float(downscale) * float(n.sqrt(energy))/3.)
     else:
         length = gridsize
-    print 'length is', length
+    print('length is', length)
     periodicity = 2*n.pi
     f, d2 = periodic_random_wave_function(energy, returnall=True,
                                           seed=seed, compiled=compiled,
@@ -3319,7 +3315,7 @@ def get_periodic_tracer(energy, gridsize=None, downscale=2,
 def stadium_constraint(square_width, circle_radius, x, y):
     '''Returns True if x, y in the desymmetrised stadium with given
     parameters, else False.'''
-    print 'stadium', square_width, circle_radius, x, y
+    print('stadium', square_width, circle_radius, x, y)
     if x < 0 or x > square_width + circle_radius:
         return False
     if 0 <= x <= square_width and 0 <= y <= circle_radius:
@@ -3477,7 +3473,7 @@ def do_domain_statistics_at_scales(scales, domains=1000, downscale=1, filen='neu
             cur_filen = get_next_filen(filen + '_{}_'.format(scale))
             with open(cur_filen, 'wb') as fileh:
                 cPickle.dump(results, fileh)
-    print
+    print()
                           
 
 def do_domain_statistics_at_scale(scale, downscale=1):
