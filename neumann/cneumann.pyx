@@ -1,6 +1,7 @@
 '''
 Cython functions for finding Neumann domains.
 '''
+from __future__ import print_function
 
 import numpy as n
 cimport numpy as n
@@ -120,10 +121,10 @@ cpdef get_critical_points(double [:, :] arr,
                 elif point_type == 'degenerate':
                     degenerate.append((x, y))
                 elif point_type == 'fail':
-                    print
-                    print 'A failure occurred at', x, y
-                    print ('=> odd number of sign changes, perhaps the '
-                           'function is symmetrical about this point.')
+                    print()
+                    print('A failure occurred at', x, y)
+                    print('=> odd number of sign changes, perhaps the '
+                          'function is symmetrical about this point.')
     if verbose:
         lineprint()
 
@@ -162,7 +163,7 @@ cpdef classify_point(double [:] ds):
     elif changes == 6:
         return 'degenerate'
     else:
-        print 'changes', changes
+        print('changes', changes)
         return 'fail'
 
 
@@ -260,7 +261,7 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
             for key in keys:
                 distance = reduce_distance(cx, cy, key, xnum, ynum)
                 if distance < nearby_distance:
-                    print 'nearby!', distance
+                    print('nearby!', distance)
                     points.append(key)
                     return (points, key)
 
