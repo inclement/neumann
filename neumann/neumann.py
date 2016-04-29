@@ -3401,7 +3401,43 @@ def get_random_hermite_mode(energy, adjust=[], seed=0):
         hermite_func = hermite
 
     polys = []
-    everything_prefac = 1/n.sqrt(2**energy)
+    sqrt = n.sqrt
+    import math
+    everything_prefac = 1/math.sqrt(2**energy)
+    for k in range(0, energy+1):
+        prefac = 1 / n.sqrt(factorial(k)*factorial(energy-k))
+        hx = partial(hermite_func, k)
+        hy = partial(hermite_func, energy-k)
+        polys.append([g.normal() * prefac, hx, hy])
+
+    for index, value in adjust:
+        polys[index][0] = polys[index][0] * value
+
+    def sumfunc(x, y):
+        ans = 0.
+        radial_prefactor = n.exp(-0.5*(x**2 + y**2))
+        for i in range(len(polys)):
+            row = polys[i]
+            ans += row[0] * row[1](x) * row[2](y)
+        return ans * radial_prefactor
+    return n.vectorize(sumfunc)
+
+def get_random_3d_hermite_mode(energy, adjust=[], seed=0):
+    '''Returns a function of x and y.'''
+    if seed == 0:
+        seed = n.random.randint(10000000)
+    g = n.random.RandomState()
+    g.seed(seed)
+
+    if cneu is not None:
+        hermite_func = cneu.hermite
+    else:
+        hermite_func = hermite
+
+    polys = []
+    sqrt = n.sqrt
+    import math
+    everything_prefac = 1/math.sqrt(2**energy)
     for k in range(0, energy+1):
         prefac = 1 / n.sqrt(factorial(k)*factorial(energy-k))
         hx = partial(hermite_func, k)
@@ -3528,6 +3564,11 @@ def flatten_results(results):
         degree_dists /= float(tracer_number)
         diameters = n.hstack(diameters)
         count = n.sum(n.array(count), axis=0)
+        if 'rhos_by_type' in tracer_results:
+            rhos_by_type['lens'] = n.hstack(rhos_by_type['lens'])
+            rhos_by_type['star'] = n.hstack(rhos_by_type['star'])
+            rhos_by_type['wedge'] = n.hstack(rhos_by_type['wedge'])
+            rhos_by_type['bad'] = n.hstack(rhos_by_type['bad'])
         new_results[scale] = {'areas': areas, 'perimeters': perimeters,
                               'rhos': rhos,
                               'rhos_by_type': rhos_by_type,
@@ -3696,3 +3737,16 @@ def degree_1_critical_point(x, y):
         return (n.sin(2*y) + epsi*n.cos(2*x)) + amp_bump * n.exp(-1/(rx**2-(x-x0)**2)-1/(ry**2-(y-y0)**2)) 
     else:
         return (n.sin(2*y) + epsi*n.cos(2*x))
+
+
+def get_rhos_by_type_dists(results, bins=30):
+    rbt = results['rhos_by_type']
+    lens = rbt['lens']
+    star = rbt['star']
+    wedge = rbt['wedge']
+
+    lys, lxs = n.histogram(lens, bins=bins)
+    sys, sxs = n.histogram(star, bins=bins)
+    wys, wxs = n.histogram(wedge, bins=bins)
+
+    return lys, lxs, sys, sxs, wys, wxs

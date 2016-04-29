@@ -29,7 +29,7 @@ def get_random_spherical_harmonic(l):
 
 def plot_func(func, modulation=0., shape=(101, 101), cmap='RdYlBu',
               emph_doms=False, clf=True, invert_modulation=True,
-              stereographic=False):
+              stereographic=False, offset=(0, 0, 0)):
     '''Takes a function and plots it over a sphere.
 
     Modulation argument controls surface modulation
@@ -62,6 +62,11 @@ def plot_func(func, modulation=0., shape=(101, 101), cmap='RdYlBu',
         x = 2*r*n.tan(theta/2.)*n.cos(phi)
         y = 2*r*n.tan(theta/2.)*n.sin(phi)
         z = n.zeros(theta.shape) + r
+        
+    x += offset[0]
+    y += offset[1]
+    z += offset[2]
+    print 'xmin is', n.min(x)
 
     surf = may.mesh(x, y, z, scalars=s, colormap=cmap)
     if emph_doms:
