@@ -162,11 +162,15 @@ class NeumannCubeHandler(object):
                             may.points3d(maxima[0], maxima[1], maxima[2], 
                                          color=(1, 0, 0))
 
-    def plot_3d_vispy(self, stereographic=True, plot_criticals=False, trace_lines=False,
-                clf=True):
+    def plot_3d_vispy(self, stereographic=True, plot_criticals=False,
+                      trace_lines=False,
+                      clf=True):
         '''Plot self and lines via stereographic projection.'''
+        from pyknot2 import visualise as pvis
+        pvis.ensure_vispy_canvas()
+        import vispy.scene as vs
         if clf:
-            may.clf()
+            pvis.clear_vispy_canvas()
         if plot_criticals:
             self.find_critical_points()
         if trace_lines:
@@ -184,11 +188,16 @@ class NeumannCubeHandler(object):
                 arr[0, 1] = -1*arr_max
                 if side != 1:
                     xs, ys, zs = side_to_xs_ys_zs(side, shape)
-                    stxs, stys = vcube_to_stereographic_projection(xs, ys, zs)
+                    stxs, stys = vcube_to_stereographic_projection(
+                        xs, ys, zs)
                     real_zs = n.zeros(xs.shape)
-                    may.mesh(stxs, stys, real_zs, scalars=arr*-1, colormap='RdYlBu')
+                    mesh = vs.GridMesh(stxs, stys, real_zs)
+                    pvis.vispy_canvas.view.add(mesh)
+                    # may.mesh(stxs, stys, real_zs, scalars=arr*-1,
+                    #          colormap='RdYlBu')
 
             if plot_criticals:
+                raise ValueError('criticals not supported yet')
                 crit_sets = [tracer.crits for tracer in self.tracers]
                 for side, crit_set in enumerate(crit_sets):
                     maxima, minima, saddles, degenerate = crit_set
@@ -201,33 +210,33 @@ class NeumannCubeHandler(object):
                         may.points3d(maxima[:, 0], maxima[:, 1],
                                      n.zeros(len(maxima)), scalars,
                                      color=(1, 0, 0))
-                    # if len(minima) > 0:
-                    #     ax.scatter(minima[:, 0], minima[:, 1], 60, c='b')
-                    # if len(saddles) > 0:
-                    #     ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow')
 
         else:  # not stereographic, plot full sphere
             for side, arr in enumerate(arrs):
-        #        if side == 0:
-                    arr[0, 0] = arr_max
-                    arr[0, 1] = -1*arr_max
-                    xs, ys, zs = side_to_xs_ys_zs(side, shape)
-                    stxs, stys, stzs = vcube_to_sphere(xs, ys, zs)
-                    may.mesh(stxs, stys, stzs, scalars=arr*-1, colormap='RdYlBu')
+                arr[0, 0] = arr_max
+                arr[0, 1] = -1*arr_max
+                xs, ys, zs = side_to_xs_ys_zs(side, shape)
+                stxs, stys, stzs = vcube_to_sphere(xs, ys, zs)
+                mesh = vs.GridMesh(stxs, stys, stzs)
+                pvis.vispy_canvas.view.add(mesh)
+                # may.mesh(stxs, stys, stzs, scalars=arr*-1, colormap='RdYlBu')
 
             if plot_criticals:
+                raise ValuEerror('criticals not yet supported')
                 crit_sets = [tracer.crits for tracer in self.tracers]
                 for side, crit_set in enumerate(crit_sets):
-        #            if side == 0:
-                        maxima, minima, saddles, degenerate = crit_set
-                        print('maxima are', maxima)
-                        maxima = crits_to_sphere(side, shape, maxima)
-                        print('maxima are', maxima)
+                    maxima, minima, saddles, degenerate = crit_set
+                    print('maxima are', maxima)
+                    maxima = crits_to_sphere(side, shape, maxima)
+                    print('maxima are', maxima)
 
-                        if len(maxima[0]) > 0:
-                            print('plotting')
-                            may.points3d(maxima[0], maxima[1], maxima[2], 
-                                         color=(1, 0, 0))
+                    if len(maxima[0]) > 0:
+                        print('plotting')
+                        may.points3d(maxima[0], maxima[1], maxima[2], 
+                                     color=(1, 0, 0))
+
+        pvis.vispy_canvas.view.camera = vs.ArcballCamera(fov=30)
+        pvis.vispy_canvas.show()
             
 
     def plot_net(self, plot_criticals=True, trace_lines=False, cmap='RdYlBu_r',
