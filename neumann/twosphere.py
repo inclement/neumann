@@ -1,4 +1,4 @@
-from ctwosphere import spherical_harmonic_2d
+from neumann.ctwosphere import spherical_harmonic_2d
 from numpy.random import RandomState
 import numpy as n
 from functools import partial
@@ -26,6 +26,10 @@ def get_random_spherical_harmonic(l):
     l, coeffs = get_random_coefficients(l)
     func = partial(random_spherical_harmonic, l, coeffs)
     return func
+
+def get_random_real_spherical_harmonic(l):
+    func = get_random_spherical_harmonic(l)
+    return lambda *args: func(*args).real
 
 def plot_func(func, modulation=0., shape=(101, 101), cmap='RdYlBu',
               emph_doms=False, clf=True, invert_modulation=True,

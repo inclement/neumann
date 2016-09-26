@@ -272,11 +272,15 @@ from scipy.misc import factorial
 import random
 import os
 import sys
-import cPickle
+try:
+    import cPickle
+except ImportError:
+    import pickle as cPickle
+
 from functools import partial
 
 try:
-    import cneumann as cneu
+    import neumann.cneumann as cneu
 except ImportError:
     print('Failed to import cneumann. Everything will work fine, but if '
           'fixed this will make things much faster!')
@@ -1465,7 +1469,7 @@ class NeumannTracer(object):
                     self.xnum, self.ynum,
                     self.func, self.crits_dict,
                     self.start_point,
-                    direction, self.to_edges,
+                    bytes(direction, 'utf-8'), self.to_edges,
                     func_params=self.func_params,
                     area_constraint=self.area_constraint,
                     integer_saddles=integer_saddles,
@@ -1482,7 +1486,7 @@ class NeumannTracer(object):
                     ang_diff = n.abs(ang_diff)
 
                     if ang_diff > 0.6*n.pi:
-                        print('trying again')
+                        # print('trying again')
                         points, endcoord = gradient_trace_func(
                             coords[0] + 0.3*diff[0],
                             coords[1] + 0.3*diff[1],
@@ -1490,7 +1494,7 @@ class NeumannTracer(object):
                             self.xnum, self.ynum,
                             self.func, self.crits_dict,
                             self.start_point,
-                            direction, self.to_edges,
+                            bytes(direction, 'utf-8'), self.to_edges,
                             func_params=self.func_params,
                             area_constraint=self.area_constraint,
                             integer_saddles=integer_saddles,
@@ -2808,7 +2812,7 @@ def get_critical_points(arr, to_edges=False, verbose=True):
     border_mult = n.ones(6, dtype=n.float64)
 
     prevx = -1
-    for x, y in product(xrange(lx), xrange(ly)):
+    for x, y in product(range(lx), range(ly)):
         if x != prevx:
             prevx = x
             if verbose:

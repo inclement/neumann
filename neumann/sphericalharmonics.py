@@ -1,7 +1,7 @@
 '''Python module for tracing Neumann domains of spherical harmonics,
 by subclassing a normal (planar) NeumannTracer.'''
 
-from neumann import NeumannTracer
+from neumann.neumann import NeumannTracer
 from functools import partial
 import numpy as n
 
@@ -12,10 +12,11 @@ from matplotlib.patches import Polygon
 try:
     import mayavi.mlab as may
 except ImportError:
-    print ('Failed to import mayavi. 3d plotting will not work '
-           '(but other stuff will work fine).')
+    pass
+    # print('Failed to import mayavi. 3d plotting will not work '
+    #       '(but other stuff will work fine).')
 
-from twosphere import get_random_spherical_harmonic
+from neumann.twosphere import get_random_spherical_harmonic
     
 
 class SphericalNeumannTracer(NeumannTracer):
@@ -94,7 +95,7 @@ class NeumannCubeHandler(object):
         theta, phi = cube_to_angles(*position)
         return self.func(theta, phi)
 
-    def plot_3d(self, stereographic=True, plot_criticals=False, trace_lines=False,
+    def plot_3d_mayavi(self, stereographic=True, plot_criticals=False, trace_lines=False,
                 clf=True):
         '''Plot self and lines via stereographic projection.'''
         if clf:
@@ -126,7 +127,7 @@ class NeumannCubeHandler(object):
                     maxima, minima, saddles, degenerate = crit_set
                     maxima = crits_to_stereographic_projection(
                         side, shape, maxima)
-                    print 'maxima are', maxima
+                    print('maxima are', maxima)
 
                     if len(maxima) > 0:
                         scalars = 1. * n.ones(len(maxima))
@@ -152,12 +153,79 @@ class NeumannCubeHandler(object):
                 for side, crit_set in enumerate(crit_sets):
         #            if side == 0:
                         maxima, minima, saddles, degenerate = crit_set
-                        print 'maxima are', maxima
+                        print('maxima are', maxima)
                         maxima = crits_to_sphere(side, shape, maxima)
-                        print 'maxima are', maxima
+                        print('maxima are', maxima)
 
                         if len(maxima[0]) > 0:
-                            print 'plotting'
+                            print('plotting')
+                            may.points3d(maxima[0], maxima[1], maxima[2], 
+                                         color=(1, 0, 0))
+
+    def plot_3d_vispy(self, stereographic=True, plot_criticals=False, trace_lines=False,
+                clf=True):
+        '''Plot self and lines via stereographic projection.'''
+        if clf:
+            may.clf()
+        if plot_criticals:
+            self.find_critical_points()
+        if trace_lines:
+            self.trace_lines()
+
+        arrs = [n.rot90(tracer.arr[::-1], 3)*-1 for tracer in self.tracers]
+
+        arr_max = n.max([n.max(n.abs(arr)) for arr in arrs])
+        
+        shape = self.shape
+
+        if stereographic:
+            for side, arr in enumerate(arrs):
+                arr[0, 0] = arr_max
+                arr[0, 1] = -1*arr_max
+                if side != 1:
+                    xs, ys, zs = side_to_xs_ys_zs(side, shape)
+                    stxs, stys = vcube_to_stereographic_projection(xs, ys, zs)
+                    real_zs = n.zeros(xs.shape)
+                    may.mesh(stxs, stys, real_zs, scalars=arr*-1, colormap='RdYlBu')
+
+            if plot_criticals:
+                crit_sets = [tracer.crits for tracer in self.tracers]
+                for side, crit_set in enumerate(crit_sets):
+                    maxima, minima, saddles, degenerate = crit_set
+                    maxima = crits_to_stereographic_projection(
+                        side, shape, maxima)
+                    print('maxima are', maxima)
+
+                    if len(maxima) > 0:
+                        scalars = 1. * n.ones(len(maxima))
+                        may.points3d(maxima[:, 0], maxima[:, 1],
+                                     n.zeros(len(maxima)), scalars,
+                                     color=(1, 0, 0))
+                    # if len(minima) > 0:
+                    #     ax.scatter(minima[:, 0], minima[:, 1], 60, c='b')
+                    # if len(saddles) > 0:
+                    #     ax.scatter(saddles[:, 0], saddles[:, 1], 60, color='yellow')
+
+        else:  # not stereographic, plot full sphere
+            for side, arr in enumerate(arrs):
+        #        if side == 0:
+                    arr[0, 0] = arr_max
+                    arr[0, 1] = -1*arr_max
+                    xs, ys, zs = side_to_xs_ys_zs(side, shape)
+                    stxs, stys, stzs = vcube_to_sphere(xs, ys, zs)
+                    may.mesh(stxs, stys, stzs, scalars=arr*-1, colormap='RdYlBu')
+
+            if plot_criticals:
+                crit_sets = [tracer.crits for tracer in self.tracers]
+                for side, crit_set in enumerate(crit_sets):
+        #            if side == 0:
+                        maxima, minima, saddles, degenerate = crit_set
+                        print('maxima are', maxima)
+                        maxima = crits_to_sphere(side, shape, maxima)
+                        print('maxima are', maxima)
+
+                        if len(maxima[0]) > 0:
+                            print('plotting')
                             may.points3d(maxima[0], maxima[1], maxima[2], 
                                          color=(1, 0, 0))
             
@@ -235,7 +303,7 @@ class NeumannCubeHandler(object):
         if trace_lines:
             line_sets = [tracer.lines for tracer in self.tracers]
             for side, lines in enumerate(line_sets):
-                print side
+                print(side)
                 for line in lines:
                     shifted_line = net_representation_shift(side, shape, line)
                     ax.plot(shifted_line[:, 0], shifted_line[:, 1], '-',
@@ -248,6 +316,8 @@ class NeumannCubeHandler(object):
         ax.set_ylim(0, 4*shape-1)
 
         fig.tight_layout()
+
+        fig.show()
             
         return fig, ax
 
@@ -322,8 +392,8 @@ def crits_to_stereographic_projection(side, shape, crits):
     scaled_crits = []
     for crit in crits:
         scaled_crits.append(n.array(crit)/float(shape) - 0.5)
-    print 'crits', crits
-    print 'scaled', scaled_crits
+    print('crits', crits)
+    print('scaled', scaled_crits)
     return(side_line_to_stereographic_projection(side, scaled_crits))
 
 def crits_to_sphere(side, shape, crits):
@@ -334,11 +404,11 @@ def crits_to_sphere(side, shape, crits):
     for crit in scaled_crits:
         xyzs.append(side_xy_to_xyz(side, crit[0], crit[1]))
     xyzs = n.array(xyzs)
-    print 'xyzs are', xyzs
+    print('xyzs are', xyzs)
 
-    print 'xyzs are', xyzs
+    print('xyzs are', xyzs)
     sphere_xyzs = vcube_to_sphere(xyzs[:, 0], xyzs[:, 1], xyzs[:, 2])
-    print 'and on sphere', sphere_xyzs
+    print('and on sphere', sphere_xyzs)
     return sphere_xyzs
 
 def side_line_to_stereographic_projection(side, line):

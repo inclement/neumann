@@ -170,7 +170,7 @@ cpdef classify_point(double [:] ds):
 cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
                           double xnum, double ynum, func,
                           dict critdict, double [:] start_point,
-                          bytes direction, to_edges,
+                          direction, to_edges,
                           tuple func_params=(),
                           area_constraint=None,
                           integer_saddles=True,
@@ -190,7 +190,7 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
     cdef double starty = start_point[1]
 
     cdef double dirfac
-    if direction == 'down':
+    if direction == b'down':
         dirfac = -1.
     else:
         dirfac = 1.
@@ -250,8 +250,8 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
         if integer_saddles:
             if (nearx, neary) in critdict:
                 crit_type = critdict[nearx, neary]
-                if ((crit_type == 'maximum' and direction == 'down') or
-                    (crit_type == 'minimum' and direction == 'up')):
+                if ((crit_type == 'maximum' and direction == b'down') or
+                    (crit_type == 'minimum' and direction == b'up')):
                 # if crit_type in ['maximum','minimum']:
                     #print (nearx, neary), crit_type, direction
                     points.append((nearx, neary))
@@ -271,8 +271,8 @@ cpdef trace_gradient_line(double sx, double sy, double dx, double dy,
             if (nearx + indx, neary + indy) in critdict:
                 coords = (nearx + indx, neary + indy)
                 crit_type = critdict[coords]
-                if ((crit_type == 'maximum' and direction == 'down') or
-                    (crit_type == 'minimum' and direction == 'up')):
+                if ((crit_type == 'maximum' and direction == b'down') or
+                    (crit_type == 'minimum' and direction == b'up')):
                 # if crit_type in ['maximum','minimum']:
                     #print (nearx, neary), crit_type, direction
                     points.append(coords)
