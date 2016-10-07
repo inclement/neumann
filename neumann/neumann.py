@@ -1530,6 +1530,60 @@ class NeumannTracer(object):
         self.isolated_saddles = isolated_saddles
         self.traced_lines = True
 
+    def trace_neumann_line(self, start_point, sign, compiled=True):
+        '''Traces a neumann line, from the given start point, until it
+        reaches a saddle point.
+        '''
+        ## NOTE: This function duplicates code from
+        ## trace_neumann_lines (to allow the tracing of more arbitrary
+        ## lines). These functions should be merged at some point.
+        if not self.arr_filled:
+            self.fill_arr()
+        if not self.found_crits:
+            self.find_critical_points()
+
+        if compiled and cneu is not None:
+            gradient_trace_func = cneu.trace_gradient_line
+        else:
+            gradient_trace_func = trace_gradient_line
+
+        sx, sy = start_point
+
+        if sx % 2 == 0:
+            ais = even_adj_indices.copy()
+        else:
+            ais = odd_adj_indices.copy()
+
+        if sign == 1.0:
+            direction = 'down'
+        else:
+            direction = 'up'
+
+        nearby_distance = 1.
+        integer_saddles = not self.upsampling_canon
+
+        points, endcoord = gradient_trace_func(
+            sx, sy,
+            self.dx, self.dy,
+            self.xnum, self.ynum,
+            self.func, self.crits_dict,
+            self.start_point, bytes(direction, 'utf-8'),
+            self.to_edges,
+            func_params=self.func_params,
+            integer_saddles=integer_saddles,
+            area_constraint=self.area_constraint)
+
+
+        self.start_points.append(None)
+        if endcoord is not None:
+            self.end_points.append(tuple(endcoord))
+        else:
+            self.end_points.append(None)
+
+        self.lines.append(n.array(points))
+
+        return self.lines[-1]
+        
     def print_critical_heights(self):
         '''
         Print the height of every critical point in self.crits.

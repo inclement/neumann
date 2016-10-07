@@ -12,7 +12,7 @@ cpdef complex spherical_harmonic_2d(long l, long m, double theta, double phi):
 
     cdef complex result = lpart * phipart
     if m < 0:
-        result = (-1.)**m * n.conj(result)
+        result = (-1.)**absm * n.conj(result)
     return result
 
 cpdef assoc_legendre(long l, long m, double x):

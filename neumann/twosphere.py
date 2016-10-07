@@ -21,6 +21,18 @@ def random_spherical_harmonic(l, coeffs, theta, phi):
     for index, m in enumerate(range(-l, l+1)):
         result += coeffs[index] * spherical_harmonic_2d(l, m, theta, phi)
     return result
+
+def random_real_spherical_harmonic(l, coeffs, theta, phi):
+    result = 0.0
+    for index, m in enumerate(range(-l, l+1)):
+        if m < 0:
+            continue
+        if m == 0:
+            result += coeffs[index] * spherical_harmonic_2d(l, m, theta, phi).real
+        else:
+            result += coeffs[index] * spherical_harmonic_2d(l, m, theta, phi).real
+            result += coeffs[index] * spherical_harmonic_2d(l, m, theta, phi).imag
+    return result
         
 def get_random_spherical_harmonic(l):
     l, coeffs = get_random_coefficients(l)
@@ -28,8 +40,9 @@ def get_random_spherical_harmonic(l):
     return func
 
 def get_random_real_spherical_harmonic(l):
-    func = get_random_spherical_harmonic(l)
-    return lambda *args: func(*args).real
+    l, coeffs = get_random_coefficients(l)
+    func = partial(random_real_spherical_harmonic, l, coeffs)
+    return func
 
 def plot_func(func, modulation=0., shape=(101, 101), cmap='RdYlBu',
               emph_doms=False, clf=True, invert_modulation=True,
