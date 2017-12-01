@@ -12,9 +12,7 @@ Contents:
    :maxdepth: 2
    
 
-.. automodule:: neumann
-   :members:
-
+   overview
 
 Indices and tables
 ==================
