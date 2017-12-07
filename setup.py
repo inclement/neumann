@@ -16,7 +16,7 @@ setup(
     description=('Numerical routines for locating and analysing '
                  'Neumann domains in real scalar functions.'),
     author='Alexander Taylor',
-    version='0.5',
+    version='0.6',
     author_email='alexander.taylor@bristol.ac.uk',
     cmdclass = {'build_ext': build_ext},
     include_dirs = [numpy.get_include()],
