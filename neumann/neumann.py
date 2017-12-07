@@ -210,35 +210,45 @@ Plotting arbitrary functions
 
 You can plot any function you like by defining a python function::
 
-    import numpy as n
+    import numpy as np
     def my_function(x, y): # x and y will be the arguments
-        return n.sin(4*x) * n.cos(2*y)  # Returning an example
-                                        # trigonometric function
+        return np.sin(4*x + 0.003) * np.cos(2*y + 0.0232) 
 
-To trace the Neumann lines, you just pass your function into a
+To trace the Neumann lines, pass your function into a
 :class:`NeumannTracer`::
 
-    import neumann as neu
-    tracer = neu.NeumannTracer(100, 100, n.pi/50, n.pi/50, func)
+    import neumann.neumann as neu
+    tracer = neu.NeumannTracer(300, 300, np.pi/150, np.pi/150, my_function)
 
-Or, if the function is periodic over the input domain (see below), you
+Or, if the function is periodic over the input domain, you
 should do::
 
-    tracer = neu.NeumannTracer(100, 100, n.pi/50, n.pi/50, func,
+    tracer = neu.NeumannTracer(300, 300, np.pi/150, np.pi/150, my_function,
                                to_edges='periodic')
 
-The first two arguments (100 and 100) are the x and y
-sampling. The second two arguments (n.pi/50) are the dx and dy values
-to sample on. For instance, the example code would have a domain of
-:math:`0` to :math:`2\\pi` :math:`(=100*\\pi/50)`.
+The first two arguments (``100`` and ``100``) are the x and y size of
+the array on which the function is sampled. The second two arguments
+(``np.pi / 150``) are the lattice spacing of the array. For instance, the
+example code above would cover a distance :math:`0` to :math:`2\\pi`
+:math:`(=100*\\pi/50)`.
 
 The tracer then just works as normal, so you can to (for instance)::
 
     tracer.get_domain_areas()
 
-to get a list of Neumann domain areas in the function you passed over the
-range of the function.
+to get a list of Neumann domain areas from the function you passed in.
 
+To plot the function, use :meth:`NeumannTracer.plot`::
+
+    tracer.plot()
+
+:meth:`NeumannTracer.plot` takes many different arguments for
+displaying different properties of the domains in different ways. You
+can experiment with these. The most imporant are:
+
+- ``show_critical_points``: Defaults to True.
+- ``trace_lines``: Whether to trace the Neumann lines and plot them. Defaults to True.
+- ``show_domain_patches``: Whether to draw coloured patches to indicate which Neumann domains have been property detected. Defaults to False.
 
 
 
@@ -393,7 +403,7 @@ class CriticalGraph(dict):
         real_labels = {}
         # Replace all the labels with one number
         for label, equivs in equivalent_labels.iteritems():
-            if real_labels.has_key(label):
+            if label in real_labels:
                 pass
             else:
                 for equiv in equivs:
@@ -406,7 +416,7 @@ class CriticalGraph(dict):
         # Create the connections list
         connections = {}
         for label, reallabel in real_labels.iteritems():
-            if connections.has_key(reallabel):
+            if reallabel in reconnections:
                 pass
             else:
                 connections[reallabel] = set()
@@ -435,7 +445,7 @@ class CriticalGraph(dict):
         node_type is the critical point type, i.e. maximum, minimum or saddle.
         '''
         assert isinstance(new_line, NeumannLine), "Didn't receive NeumannLine!"
-        if not self.has_key(node_coords):
+        if not node_coords in self:
             self[node_coords] = [node_type, []]
         self[node_coords][1].append(new_line)
 
@@ -620,7 +630,7 @@ class CriticalGraph(dict):
                 return None
             node = curline.end
             crit_type, node_lines = self[node]
-            lines_come_from = map(lambda j: j.end, node_lines)
+            lines_come_from = list(map(lambda j: j.end, node_lines))
             if start in lines_come_from:
                 in_line_index = lines_come_from.index(start)
             else:
