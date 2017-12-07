@@ -2748,7 +2748,7 @@ def trace_gradient_line(sx, sy, dx, dy, xnum, ynum, func,
     '''
     cx, cy = sx, sy
     startx, starty = start_point
-    if direction == 'down':
+    if direction == b'down':
         dirfac = -1
     else:
         dirfac = 1
